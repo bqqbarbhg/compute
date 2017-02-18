@@ -18,9 +18,15 @@
     <ClCompile Include="..\..\..\src\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\shader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\opengl.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\shader.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>
