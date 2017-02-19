@@ -30,7 +30,6 @@ void APIENTRY GlDebugCallback(GLenum source, GLenum type, GLuint id, GLenum seve
 	__debugbreak();
 }
 
-Shader *ObjectShader;
 
 char *ReadFile(const char *path)
 {
@@ -50,11 +49,16 @@ char *ReadFile(const char *path)
 	return buf;
 }
 
-Buffer *VB[2], *UniformBuffer, *IB;
-VertexSpec *VSpec;
+Shader *ObjectShader, *QuadShader;
+Buffer *VB[2], *UniformBuffer, *IB, *QuadVB;
+Buffer *QuadUB[4];
+VertexSpec *VSpec, *QuadVSpec;
 CommandBuffer *CBuf;
 Texture *Tex;
 Sampler *Samp;
+Framebuffer *FBuf;
+Texture *Color[2];
+Texture *Depth;
 
 struct VPos3D
 {
@@ -71,11 +75,15 @@ VertexElement VPos3D_Col_Elements[] = {
 	{ 1, 1, 4, DataUInt8, true, 0*4, 1*4 },
 };
 
+VertexElement VPos3D_Elements[] = {
+	{ 0, 0, 3, DataFloat, false, 0*4, 3*4 },
+};
+
 VPos3D TrianglePos[] = {
-	{ -1.0f, +1.0f, 0.0f },
-	{ +1.0f, +1.0f, 0.0f },
-	{ -1.0f, -1.0f, 0.0f },
-	{ +1.0f, -1.0f, 0.0f },
+	{ -1.0f, +1.0f, 0.9f },
+	{ +1.0f, +1.0f, 0.9f },
+	{ -1.0f, -1.0f, -0.9f },
+	{ +1.0f, -1.0f, -0.9f },
 };
 
 VCol TriangleCol[] = {
@@ -83,6 +91,13 @@ VCol TriangleCol[] = {
 	0xFF00FF00,
 	0xFFFF0000,
 	0xFFFF00FF,
+};
+
+VPos3D QuadPos[] = {
+	{ 0.0f, 0.0f, 0.0f },
+	{ 1.0f, 0.0f, 0.0f },
+	{ 0.0f, 1.0f, 0.0f },
+	{ 1.0f, 1.0f, 0.0f },
 };
 
 uint32_t TexData[] = {
@@ -103,6 +118,13 @@ float ModelViewProjection[16] = {
 	0.0f, 0.0f, 0.0f, 1.0f,
 };
 
+float QuadOffset[] = {
+	0.0f, 0.0f,
+	-1.0f, 0.0f,
+	0.0f, -1.0f,
+	-1.0f, -1.0f,
+};
+
 void Initialize()
 {
 	{
@@ -112,6 +134,15 @@ void Initialize()
 		src[1].Type = ShaderTypeFragment;
 		src[1].Source = ReadFile("shader/object/object_frag.glsl");
 		ObjectShader = CreateShader(src, 2);
+	}
+
+	{
+		ShaderSource src[2];
+		src[0].Type = ShaderTypeVertex;
+		src[0].Source = ReadFile("shader/test/quad_vert.glsl");
+		src[1].Type = ShaderTypeFragment;
+		src[1].Source = ReadFile("shader/test/quad_frag.glsl");
+		QuadShader = CreateShader(src, 2);
 	}
 
 	{
@@ -125,10 +156,22 @@ void Initialize()
 	CBuf = CreateCommandBuffer();
 
 	VSpec = CreateVertexSpec(VPos3D_Col_Elements, ArrayCount(VPos3D_Col_Elements));
+	QuadVSpec = CreateVertexSpec(VPos3D_Elements, ArrayCount(VPos3D_Elements));
 	UniformBuffer = CreateStaticBuffer(BufferUniform, ModelViewProjection, sizeof(ModelViewProjection));
 	VB[0] = CreateStaticBuffer(BufferVertex, TrianglePos, sizeof(TrianglePos));
 	VB[1] = CreateStaticBuffer(BufferVertex, TriangleCol, sizeof(TriangleCol));
 	IB = CreateStaticBuffer(BufferIndex, TriangleIndex, sizeof(TriangleIndex));
+	QuadVB = CreateStaticBuffer(BufferVertex, QuadPos, sizeof(QuadPos));
+
+	QuadUB[0] = CreateStaticBuffer(BufferUniform, QuadOffset + 0, sizeof(float) * 2);
+	QuadUB[1] = CreateStaticBuffer(BufferUniform, QuadOffset + 2, sizeof(float) * 2);
+	QuadUB[2] = CreateStaticBuffer(BufferUniform, QuadOffset + 4, sizeof(float) * 2);
+	QuadUB[3] = CreateStaticBuffer(BufferUniform, QuadOffset + 6, sizeof(float) * 2);
+
+	Color[0] = CreateStaticTexture2D(NULL, 1, 1280, 720, TexRGBA8);
+	Color[1] = CreateStaticTexture2D(NULL, 1, 1280, 720, TexRGBA8);
+	Depth = CreateStaticTexture2D(NULL, 1, 1280, 720, TexDepth32);
+	FBuf = CreateFramebuffer(Color, 2, Depth, NULL);
 
 	const void *data = TexData;
 	Tex = CreateStaticTexture2D(&data, 1, 4, 4, TexRGBA8);
@@ -136,16 +179,42 @@ void Initialize()
 
 void Render()
 {
-	glClearColor(0x64/255.0f, 0x95/255.0f, 0xED/255.0f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
-
 	CommandBuffer *cb = CBuf;
+
+	glEnable(GL_DEPTH_TEST);
+
+	SetFramebuffer(cb, FBuf);
+
+	glClearColor(0x64 / 255.0f, 0x95 / 255.0f, 0xED / 255.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 
 	SetUniformBuffer(cb, 0, UniformBuffer);
 	SetVertexBuffers(cb, VSpec, VB, 2);
 	SetIndexBuffer(cb, IB, DataUInt16);
 	SetTexture(cb, 0, Tex, Samp);
 	SetShader(cb, ObjectShader);
+	DrawIndexed(cb, DrawTriangles, 6, 0);
+
+	SetFramebuffer(cb, NULL);
+
+	glClearColor(0x64 / 255.0f, 0x95 / 255.0f, 0xED / 255.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	SetVertexBuffers(cb, QuadVSpec, &QuadVB, 1);
+	SetIndexBuffer(cb, IB, DataUInt16);
+	SetShader(cb, QuadShader);
+
+	SetUniformBuffer(cb, 0, QuadUB[0]);
+	SetTexture(cb, 0, Color[0], Samp);
+	DrawIndexed(cb, DrawTriangles, 6, 0);
+
+	SetUniformBuffer(cb, 0, QuadUB[1]);
+	SetTexture(cb, 0, Color[1], Samp);
+	DrawIndexed(cb, DrawTriangles, 6, 0);
+
+	SetUniformBuffer(cb, 0, QuadUB[2]);
+	SetTexture(cb, 0, Depth, Samp);
 	DrawIndexed(cb, DrawTriangles, 6, 0);
 }
 

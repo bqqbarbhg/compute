@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <assert.h>
 #include <unordered_map>
 
 struct Buffer
@@ -12,7 +13,7 @@ struct Buffer
 	GLenum BindPoint;
 };
 
-GLenum GlBufferType[] =
+const GLenum GlBufferType[] =
 {
 	GL_ARRAY_BUFFER,
 	GL_ELEMENT_ARRAY_BUFFER,
@@ -43,7 +44,7 @@ struct VertexSpec
 	VertexElement Elements[1];
 };
 
-GLenum GlDataType[] =
+const GLenum GlDataType[] =
 {
 	GL_FLOAT,
 	GL_UNSIGNED_BYTE,
@@ -51,7 +52,7 @@ GLenum GlDataType[] =
 	GL_UNSIGNED_INT,
 };
 
-GLenum GlDrawType[] =
+const GLenum GlDrawType[] =
 {
 	GL_POINTS,
 	GL_LINES,
@@ -60,7 +61,7 @@ GLenum GlDrawType[] =
 
 VertexSpec *CreateVertexSpec(const VertexElement *el, uint32_t count)
 {
-	VertexSpec *spec = (VertexSpec*)malloc(sizeof(uint32_t) + sizeof(VertexElement) * count);
+	VertexSpec *spec = (VertexSpec*)malloc(sizeof(VertexSpec) + sizeof(VertexElement) * count);
 
 	spec->NumElements = count;
 	memcpy(spec->Elements, el, count * sizeof(VertexElement));
@@ -166,7 +167,7 @@ void DrawIndexed(CommandBuffer *cb, DrawType type, uint32_t num, uint32_t indexO
 	glDrawElements(GlDrawType[type], num, cb->IndexType, (const GLvoid*)(uintptr_t)indexOffset);
 }
 
-GLenum GlShaderTypes[ShaderTypeCount] = {
+const GLenum GlShaderTypes[ShaderTypeCount] = {
 	GL_VERTEX_SHADER,
 	GL_FRAGMENT_SHADER,
 	GL_COMPUTE_SHADER,
@@ -289,25 +290,25 @@ struct Sampler
 	GLuint SamplerObject;
 };
 
-GLenum GlFilterModeMag[] =
+const GLenum GlFilterModeMag[] =
 {
 	GL_NEAREST,
 	GL_LINEAR,
 };
 
-GLenum GlFilterModeMinNearest[] =
+const GLenum GlFilterModeMinNearest[] =
 {
 	GL_NEAREST_MIPMAP_NEAREST,
 	GL_LINEAR_MIPMAP_NEAREST,
 };
 
-GLenum GlFilterModeMinLinear[] =
+const GLenum GlFilterModeMinLinear[] =
 {
 	GL_NEAREST_MIPMAP_LINEAR,
 	GL_LINEAR_MIPMAP_LINEAR,
 };
 
-GLenum GlWrapMode[] =
+const GLenum GlWrapMode[] =
 {
 	GL_REPEAT,
 	GL_MIRRORED_REPEAT,
@@ -319,8 +320,8 @@ Sampler *CreateSampler(const SamplerInfo *si)
 	Sampler *s = (Sampler*)malloc(sizeof(Sampler));
 	glGenSamplers(1, &s->SamplerObject);
 
-	GLenum *mag = GlFilterModeMag;
-	GLenum *min = si->Mip == FilterNearest ? GlFilterModeMinNearest : GlFilterModeMinLinear;
+	const GLenum *mag = GlFilterModeMag;
+	const GLenum *min = si->Mip == FilterNearest ? GlFilterModeMinNearest : GlFilterModeMinLinear;
 
 	glSamplerParameteri(s->SamplerObject, GL_TEXTURE_MAG_FILTER, mag[si->Mag]);
 	glSamplerParameteri(s->SamplerObject, GL_TEXTURE_MIN_FILTER, mag[si->Min]);
@@ -337,9 +338,10 @@ struct Texture
 {
 	GLuint Tex;
 	GLenum BindPoint;
+	TexFormat Format;
 };
 
-GLenum GlTextureType[] =
+const GLenum GlTextureType[] =
 {
 	GL_TEXTURE_1D,
 	GL_TEXTURE_2D,
@@ -356,25 +358,28 @@ Texture *CreateTexture(TextureType type)
 
 struct GlTexFormatPair
 {
-	GLenum Format, Type;
+	GLenum InternalFormat, Format, Type;
+	bool HasDepth, HasStencil;
 };
 
-GlTexFormatPair GlTexFormat[] =
+const GlTexFormatPair GlTexFormat[] =
 {
-	{ GL_RGBA, GL_UNSIGNED_BYTE },
+	{ GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE, false, false },
+	{ GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT, GL_FLOAT, true, false, },
 };
 
 Texture *CreateStaticTexture2D(const void **data, uint32_t levels, uint32_t width, uint32_t height, TexFormat format)
 {
-	GlTexFormatPair fmt = GlTexFormat[format];
+	const GlTexFormatPair *fmt = &GlTexFormat[format];
 	Texture *t = CreateTexture(Texture2D);
+	t->Format = format;
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(t->BindPoint, t->Tex);
 
 	uint32_t w = width, h = height;
 	for (uint32_t i = 0; i < levels; i++)
 	{
-		glTexImage2D(t->BindPoint, i, fmt.Format, w, h, 0, fmt.Format, fmt.Type, data[i]);
+		glTexImage2D(t->BindPoint, i, fmt->InternalFormat, w, h, 0, fmt->Format, fmt->Type, data ? data[i] : NULL);
 
 		w /= 2;
 		h /= 2;
@@ -388,5 +393,84 @@ void SetTexture(CommandBuffer *cb, uint32_t index, Texture *tex, Sampler *sm)
 	glActiveTexture(GL_TEXTURE0 + index);
 	glBindTexture(tex->BindPoint, tex->Tex);
 	glBindSampler(index, sm->SamplerObject);
+}
+
+struct Framebuffer
+{
+	GLuint Buf;
+	GLuint DepthRenderbuffer;
+	GLenum DrawBuffers[8];
+	uint32_t NumColorBuffers;
+};
+
+GLenum GetFramebufferAttachmentPoint(TexFormat format)
+{
+	const GlTexFormatPair *tp = &GlTexFormat[format];
+	if (tp->HasStencil && tp->HasDepth)
+		return GL_DEPTH_STENCIL_ATTACHMENT;
+	else if (tp->HasDepth)
+		return GL_DEPTH_ATTACHMENT;
+	else if (tp->HasStencil)
+		return GL_STENCIL_ATTACHMENT;
+	else
+	{
+		assert(0 && "Format does not support depth or stencil");
+		return 0;
+	}
+}
+
+Framebuffer *CreateFramebuffer(Texture **color, uint32_t numColor, Texture *depthStencilTexture, DepthStencilCreateInfo *depthStencilCreate)
+{
+	Framebuffer *f = (Framebuffer*)malloc(sizeof(Framebuffer));
+	f->DepthRenderbuffer = 0;
+	f->NumColorBuffers = numColor;
+
+	glGenFramebuffers(1, &f->Buf);
+	glBindFramebuffer(GL_FRAMEBUFFER, f->Buf);
+
+	glActiveTexture(GL_TEXTURE0);
+	for (uint32_t i = 0; i < numColor; i++)
+	{
+		Texture *tex = color[i];
+		glBindTexture(tex->BindPoint, tex->Tex);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, tex->Tex, 0);
+
+		f->DrawBuffers[i] = GL_COLOR_ATTACHMENT0 + i;
+	}
+
+	if (depthStencilTexture)
+	{
+		GLenum atc = GetFramebufferAttachmentPoint(depthStencilTexture->Format);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, atc, GL_TEXTURE_2D, depthStencilTexture->Tex, 0);
+	}
+	else if (depthStencilCreate)
+	{
+		DepthStencilCreateInfo *ci = depthStencilCreate;
+		glGenRenderbuffers(1, &f->DepthRenderbuffer);
+		glBindRenderbuffer(GL_RENDERBUFFER, f->DepthRenderbuffer);
+		glRenderbufferStorage(GL_RENDERBUFFER, ci->Format, ci->Width, ci->Height);
+
+		GLenum atc = GetFramebufferAttachmentPoint(ci->Format);
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER, atc, GL_RENDERBUFFER, f->DepthRenderbuffer);
+	}
+
+	{
+		GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+		assert(status == GL_FRAMEBUFFER_COMPLETE);
+	}
+
+	glDrawBuffers(f->NumColorBuffers, f->DrawBuffers);
+	glBindRenderbuffer(GL_RENDERBUFFER, 0);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	return f;
+}
+
+void SetFramebuffer(CommandBuffer *cb, Framebuffer *f)
+{
+	if (f)
+		glBindFramebuffer(GL_FRAMEBUFFER, f->Buf);
+	else
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 

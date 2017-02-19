@@ -8,6 +8,7 @@ struct CommandBuffer;
 struct VertexSpec;
 struct Sampler;
 struct Texture;
+struct Framebuffer;
 
 enum BufferType
 {
@@ -53,6 +54,19 @@ enum WrapMode
 	WrapMirror,
 };
 
+enum TextureType
+{
+	Texture1D,
+	Texture2D,
+	Texture3D,
+};
+
+enum TexFormat
+{
+	TexRGBA8,
+	TexDepth32,
+};
+
 struct VertexElement
 {
 	uint32_t Stream;
@@ -77,16 +91,11 @@ struct SamplerInfo
 	uint32_t Anisotropy;
 };
 
-enum TextureType
+struct DepthStencilCreateInfo
 {
-	Texture1D,
-	Texture2D,
-	Texture3D,
-};
-
-enum TexFormat
-{
-	TexRGBA8,
+	TexFormat Format;
+	uint32_t Width;
+	uint32_t Height;
 };
 
 void SetVertexBuffers(CommandBuffer *cb, VertexSpec *spec, Buffer **buffers, uint32_t numStreams);
@@ -102,6 +111,8 @@ void DestroyShader(Shader *s);
 Texture *CreateTexture(TextureType type);
 Texture *CreateStaticTexture2D(const void **data, uint32_t levels, uint32_t width, uint32_t height, TexFormat format);
 
+Framebuffer *CreateFramebuffer(Texture **color, uint32_t numColor, Texture *depthStencilTexture, DepthStencilCreateInfo *depthStencilCreate);
+
 Sampler *CreateSampler(const SamplerInfo *si);
 
 void SetVertexBuffers(CommandBuffer *cb, VertexSpec *spec, Buffer **buffers, uint32_t numStreams);
@@ -109,5 +120,6 @@ void SetUniformBuffer(CommandBuffer *cb, uint32_t index, Buffer *b);
 void SetShader(CommandBuffer *cb, Shader *s);
 void SetIndexBuffer(CommandBuffer *cb, Buffer *b, DataType type);
 void SetTexture(CommandBuffer *cb, uint32_t index, Texture *tex, Sampler *sm);
+void SetFramebuffer(CommandBuffer *cb, Framebuffer *f);
 void DrawIndexed(CommandBuffer *cb, DrawType type, uint32_t num, uint32_t indexOffset);
 
