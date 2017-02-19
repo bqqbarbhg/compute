@@ -98,10 +98,26 @@ struct DepthStencilCreateInfo
 	uint32_t Height;
 };
 
+struct ClearInfo
+{
+	bool ClearColor;
+	bool ClearDepth;
+	bool ClearStencil;
+
+	float Color[4];
+	float Depth;
+	uint32_t Stencil;
+};
+
 void SetVertexBuffers(CommandBuffer *cb, VertexSpec *spec, Buffer **buffers, uint32_t numStreams);
 
 Buffer *CreateBuffer(BufferType type);
 Buffer *CreateStaticBuffer(BufferType type, const void *data, size_t size);
+void SetBufferData(Buffer *b, const void *data, size_t size);
+
+void *LockBuffer(Buffer *b);
+void UnlockBuffer(Buffer *b);
+
 VertexSpec *CreateVertexSpec(const VertexElement *el, uint32_t count);
 CommandBuffer *CreateCommandBuffer();
 
@@ -115,6 +131,7 @@ Framebuffer *CreateFramebuffer(Texture **color, uint32_t numColor, Texture *dept
 
 Sampler *CreateSampler(const SamplerInfo *si);
 
+void Clear(CommandBuffer *cb, const ClearInfo *ci);
 void SetVertexBuffers(CommandBuffer *cb, VertexSpec *spec, Buffer **buffers, uint32_t numStreams);
 void SetUniformBuffer(CommandBuffer *cb, uint32_t index, Buffer *b);
 void SetShader(CommandBuffer *cb, Shader *s);

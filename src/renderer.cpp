@@ -38,6 +38,25 @@ Buffer *CreateStaticBuffer(BufferType type, const void *data, size_t size)
 	return b;
 }
 
+void SetBufferData(Buffer *b, const void *data, size_t size)
+{
+	GLenum bp = b->BindPoint;
+	glBindBuffer(bp, b->Buf);
+	glBufferData(bp, size, data, GL_STATIC_DRAW);
+}
+
+void *LockBuffer(Buffer *b)
+{
+	glBindBuffer(b->BindPoint, b->Buf);
+	return glMapBuffer(b->BindPoint, GL_WRITE_ONLY);
+}
+
+void UnlockBuffer(Buffer *b)
+{
+	glBindBuffer(b->BindPoint, b->Buf);
+	glUnmapBuffer(b->BindPoint);
+}
+
 struct VertexSpec
 {
 	uint32_t NumElements;
@@ -472,5 +491,32 @@ void SetFramebuffer(CommandBuffer *cb, Framebuffer *f)
 		glBindFramebuffer(GL_FRAMEBUFFER, f->Buf);
 	else
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void Clear(CommandBuffer *cb, const ClearInfo *ci)
+{
+	uint32_t flags = 0;
+
+	if (ci->ClearColor)
+	{
+		const float *c = ci->Color;
+		glClearColor(c[0], c[1], c[2], c[3]);
+		flags |= GL_COLOR_BUFFER_BIT;
+	}
+
+	if (ci->ClearDepth)
+	{
+		glClearDepth(ci->Depth);
+		flags |= GL_DEPTH_BUFFER_BIT;
+	}
+
+	if (ci->ClearStencil)
+	{
+		glClearStencil(ci->Stencil);
+		flags |= GL_STENCIL_BUFFER_BIT;
+	}
+
+	if (flags)
+		glClear(flags);
 }
 
