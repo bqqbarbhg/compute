@@ -53,6 +53,8 @@ char *ReadFile(const char *path)
 Buffer *VB[2], *UniformBuffer, *IB;
 VertexSpec *VSpec;
 CommandBuffer *CBuf;
+Texture *Tex;
+Sampler *Samp;
 
 struct VPos3D
 {
@@ -83,6 +85,13 @@ VCol TriangleCol[] = {
 	0xFFFF00FF,
 };
 
+uint32_t TexData[] = {
+	0xFF0000FF, 0xFF00FF00, 0xFFFF0000, 0xFFFF00FF,
+	0xFFFF0000, 0xFFFF00FF, 0xFF0000FF, 0xFF00FF00,
+	0xFF0000FF, 0xFF00FF00, 0xFFFF0000, 0xFFFF00FF,
+	0xFFFF0000, 0xFFFF00FF, 0xFF0000FF, 0xFF00FF00,
+};
+
 uint16_t TriangleIndex[] = {
 	0, 1, 2, 1, 2, 3,
 };
@@ -105,6 +114,14 @@ void Initialize()
 		ObjectShader = CreateShader(src, 2);
 	}
 
+	{
+		SamplerInfo si;
+		si.Min = si.Mag = si.Mip = FilterLinear;
+		si.WrapU = si.WrapV = si.WrapW = WrapWrap;
+		si.Anisotropy = 0;
+		Samp = CreateSampler(&si);
+	}
+
 	CBuf = CreateCommandBuffer();
 
 	VSpec = CreateVertexSpec(VPos3D_Col_Elements, ArrayCount(VPos3D_Col_Elements));
@@ -112,6 +129,9 @@ void Initialize()
 	VB[0] = CreateStaticBuffer(BufferVertex, TrianglePos, sizeof(TrianglePos));
 	VB[1] = CreateStaticBuffer(BufferVertex, TriangleCol, sizeof(TriangleCol));
 	IB = CreateStaticBuffer(BufferIndex, TriangleIndex, sizeof(TriangleIndex));
+
+	const void *data = TexData;
+	Tex = CreateStaticTexture2D(&data, 1, 4, 4, TexRGBA8);
 }
 
 void Render()
@@ -124,6 +144,7 @@ void Render()
 	SetUniformBuffer(cb, 0, UniformBuffer);
 	SetVertexBuffers(cb, VSpec, VB, 2);
 	SetIndexBuffer(cb, IB, DataUInt16);
+	SetTexture(cb, 0, Tex, Samp);
 	SetShader(cb, ObjectShader);
 	DrawIndexed(cb, DrawTriangles, 6, 0);
 }

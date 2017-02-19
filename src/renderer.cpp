@@ -284,4 +284,109 @@ void SetShader(CommandBuffer *cb, Shader *s)
 	glUseProgram(s->Program);
 }
 
+struct Sampler
+{
+	GLuint SamplerObject;
+};
+
+GLenum GlFilterModeMag[] =
+{
+	GL_NEAREST,
+	GL_LINEAR,
+};
+
+GLenum GlFilterModeMinNearest[] =
+{
+	GL_NEAREST_MIPMAP_NEAREST,
+	GL_LINEAR_MIPMAP_NEAREST,
+};
+
+GLenum GlFilterModeMinLinear[] =
+{
+	GL_NEAREST_MIPMAP_LINEAR,
+	GL_LINEAR_MIPMAP_LINEAR,
+};
+
+GLenum GlWrapMode[] =
+{
+	GL_REPEAT,
+	GL_MIRRORED_REPEAT,
+	GL_CLAMP_TO_EDGE,
+};
+
+Sampler *CreateSampler(const SamplerInfo *si)
+{
+	Sampler *s = (Sampler*)malloc(sizeof(Sampler));
+	glGenSamplers(1, &s->SamplerObject);
+
+	GLenum *mag = GlFilterModeMag;
+	GLenum *min = si->Mip == FilterNearest ? GlFilterModeMinNearest : GlFilterModeMinLinear;
+
+	glSamplerParameteri(s->SamplerObject, GL_TEXTURE_MAG_FILTER, mag[si->Mag]);
+	glSamplerParameteri(s->SamplerObject, GL_TEXTURE_MIN_FILTER, mag[si->Min]);
+	if (si->Anisotropy > 0)
+		glSamplerParameterf(s->SamplerObject, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)si->Anisotropy);
+	glSamplerParameteri(s->SamplerObject, GL_TEXTURE_WRAP_S, GlWrapMode[si->WrapU]);
+	glSamplerParameteri(s->SamplerObject, GL_TEXTURE_WRAP_T, GlWrapMode[si->WrapV]);
+	glSamplerParameteri(s->SamplerObject, GL_TEXTURE_WRAP_R, GlWrapMode[si->WrapW]);
+
+	return s;
+}
+
+struct Texture
+{
+	GLuint Tex;
+	GLenum BindPoint;
+};
+
+GLenum GlTextureType[] =
+{
+	GL_TEXTURE_1D,
+	GL_TEXTURE_2D,
+	GL_TEXTURE_3D,
+};
+
+Texture *CreateTexture(TextureType type)
+{
+	Texture *t = (Texture*)malloc(sizeof(Texture));
+	glGenTextures(1, &t->Tex);
+	t->BindPoint = GlTextureType[type];
+	return t;
+}
+
+struct GlTexFormatPair
+{
+	GLenum Format, Type;
+};
+
+GlTexFormatPair GlTexFormat[] =
+{
+	{ GL_RGBA, GL_UNSIGNED_BYTE },
+};
+
+Texture *CreateStaticTexture2D(const void **data, uint32_t levels, uint32_t width, uint32_t height, TexFormat format)
+{
+	GlTexFormatPair fmt = GlTexFormat[format];
+	Texture *t = CreateTexture(Texture2D);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(t->BindPoint, t->Tex);
+
+	uint32_t w = width, h = height;
+	for (uint32_t i = 0; i < levels; i++)
+	{
+		glTexImage2D(t->BindPoint, i, fmt.Format, w, h, 0, fmt.Format, fmt.Type, data[i]);
+
+		w /= 2;
+		h /= 2;
+	}
+
+	return t;
+}
+
+void SetTexture(CommandBuffer *cb, uint32_t index, Texture *tex, Sampler *sm)
+{
+	glActiveTexture(GL_TEXTURE0 + index);
+	glBindTexture(tex->BindPoint, tex->Tex);
+	glBindSampler(index, sm->SamplerObject);
+}
 
