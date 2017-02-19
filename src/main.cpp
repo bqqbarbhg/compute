@@ -1,7 +1,9 @@
 #include "opengl.h"
-#include "shader.h"
+#include "renderer.h"
 #include <stdio.h>
 #include <stdlib.h>
+
+#define ArrayCount(arr) (sizeof(arr) / sizeof(*(arr)))
 
 GLFWwindow *g_Window;
 
@@ -48,20 +50,41 @@ char *ReadFile(const char *path)
 	return buf;
 }
 
-GLuint VertexBuffer;
-GLuint VertexSpec;
-GLuint UniformBuffer;
+Buffer *VB[2], *UniformBuffer, *IB;
+VertexSpec *VSpec;
+CommandBuffer *CBuf;
 
-struct VPos3DCol
+struct VPos3D
 {
 	float x, y, z;
+};
+
+struct VCol
+{
 	uint32_t col;
 };
 
-VPos3DCol Triangle[] = {
-	{ 0.0f, +1.0f, 0.0f, 0xFF0000FF },
-	{ -1.0f, 0.0f, 0.0f, 0xFF00FF00 },
-	{ +1.0f, 0.0f, 0.0f, 0xFFFF0000 },
+VertexElement VPos3D_Col_Elements[] = {
+	{ 0, 0, 3, DataFloat, false, 0*4, 3*4 },
+	{ 1, 1, 4, DataUInt8, true, 0*4, 1*4 },
+};
+
+VPos3D TrianglePos[] = {
+	{ -1.0f, +1.0f, 0.0f },
+	{ +1.0f, +1.0f, 0.0f },
+	{ -1.0f, -1.0f, 0.0f },
+	{ +1.0f, -1.0f, 0.0f },
+};
+
+VCol TriangleCol[] = {
+	0xFF0000FF,
+	0xFF00FF00,
+	0xFFFF0000,
+	0xFFFF00FF,
+};
+
+uint16_t TriangleIndex[] = {
+	0, 1, 2, 1, 2, 3,
 };
 
 float ModelViewProjection[16] = {
@@ -82,28 +105,13 @@ void Initialize()
 		ObjectShader = CreateShader(src, 2);
 	}
 
-	{
-		glGenBuffers(1, &VertexBuffer);
-		glBindBuffer(GL_ARRAY_BUFFER, VertexBuffer);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(Triangle), Triangle, GL_STATIC_DRAW);
-	}
+	CBuf = CreateCommandBuffer();
 
-	{
-		glGenVertexArrays(1, &VertexSpec);
-		glBindVertexArray(VertexSpec);
-
-		glEnableVertexAttribArray(0);
-		glEnableVertexAttribArray(1);
-
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 4 * 4, (const GLvoid*)(0 * 4));
-		glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_TRUE, 4 * 4, (const GLvoid*)(3 * 4));
-	}
-
-	{
-		glGenBuffers(1, &UniformBuffer);
-		glBindBuffer(GL_UNIFORM_BUFFER, UniformBuffer);
-		glBufferData(GL_UNIFORM_BUFFER, sizeof(ModelViewProjection), ModelViewProjection, GL_STATIC_DRAW);
-	}
+	VSpec = CreateVertexSpec(VPos3D_Col_Elements, ArrayCount(VPos3D_Col_Elements));
+	UniformBuffer = CreateStaticBuffer(BufferUniform, ModelViewProjection, sizeof(ModelViewProjection));
+	VB[0] = CreateStaticBuffer(BufferVertex, TrianglePos, sizeof(TrianglePos));
+	VB[1] = CreateStaticBuffer(BufferVertex, TriangleCol, sizeof(TriangleCol));
+	IB = CreateStaticBuffer(BufferIndex, TriangleIndex, sizeof(TriangleIndex));
 }
 
 void Render()
@@ -111,13 +119,13 @@ void Render()
 	glClearColor(0x64/255.0f, 0x95/255.0f, 0xED/255.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	glBindBufferBase(GL_UNIFORM_BUFFER, 0, UniformBuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, VertexBuffer);
-	glBindVertexArray(VertexSpec);
+	CommandBuffer *cb = CBuf;
 
-	SetShader(ObjectShader);
-
-	glDrawArrays(GL_TRIANGLES, 0, 3);
+	SetUniformBuffer(cb, 0, UniformBuffer);
+	SetVertexBuffers(cb, VSpec, VB, 2);
+	SetIndexBuffer(cb, IB, DataUInt16);
+	SetShader(cb, ObjectShader);
+	DrawIndexed(cb, DrawTriangles, 6, 0);
 }
 
 int main(int argc, char **argv)

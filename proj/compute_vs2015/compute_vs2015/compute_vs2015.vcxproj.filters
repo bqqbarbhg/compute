@@ -18,7 +18,7 @@
     <ClCompile Include="..\..\..\src\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\src\shader.cpp">
+    <ClCompile Include="..\..\..\src\renderer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -26,7 +26,7 @@
     <ClInclude Include="..\..\..\src\opengl.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\shader.h">
+    <ClInclude Include="..\..\..\src\renderer.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>
