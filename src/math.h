@@ -34,7 +34,7 @@ struct Vec4
 	float x, y, z, w;
 };
 
-Vec2 vec2(float x, float y)
+inline Vec2 vec2(float x, float y)
 {
 	Vec2 ret;
 	ret.x = x;
@@ -42,7 +42,7 @@ Vec2 vec2(float x, float y)
 	return ret;
 }
 
-Vec2 operator-(const Vec2& a)
+inline Vec2 operator-(const Vec2& a)
 {
 	Vec2 ret;
 
@@ -52,7 +52,7 @@ Vec2 operator-(const Vec2& a)
 	return ret;
 }
 
-Vec2 operator+(const Vec2& a, const Vec2& b)
+inline Vec2 operator+(const Vec2& a, const Vec2& b)
 {
 	Vec2 ret;
 
@@ -62,21 +62,21 @@ Vec2 operator+(const Vec2& a, const Vec2& b)
 	return ret;
 }
 
-Vec2& operator+=(Vec2& a, const Vec2& b)
+inline Vec2& operator+=(Vec2& a, const Vec2& b)
 {
 	a.x += b.x;
 	a.y += b.y;
 	return a;
 }
 
-Vec2& operator-=(Vec2& a, const Vec2& b)
+inline Vec2& operator-=(Vec2& a, const Vec2& b)
 {
 	a.x -= b.x;
 	a.y -= b.y;
 	return a;
 }
 
-Vec2 operator-(const Vec2& a, const Vec2& b)
+inline Vec2 operator-(const Vec2& a, const Vec2& b)
 {
 	Vec2 ret;
 
@@ -86,7 +86,7 @@ Vec2 operator-(const Vec2& a, const Vec2& b)
 	return ret;
 }
 
-Vec3 vec3(float x, float y, float z)
+inline Vec3 vec3(float x, float y, float z)
 {
 	Vec3 ret;
 	ret.x = x;
@@ -95,7 +95,7 @@ Vec3 vec3(float x, float y, float z)
 	return ret;
 }
 
-Vec3 operator-(const Vec3& a)
+inline Vec3 operator-(const Vec3& a)
 {
 	Vec3 ret;
 
@@ -106,7 +106,7 @@ Vec3 operator-(const Vec3& a)
 	return ret;
 }
 
-Vec3 operator+(const Vec3& a, const Vec3& b)
+inline Vec3 operator+(const Vec3& a, const Vec3& b)
 {
 	Vec3 ret;
 
@@ -117,14 +117,14 @@ Vec3 operator+(const Vec3& a, const Vec3& b)
 	return ret;
 }
 
-Vec3& operator+=(Vec3& a, const Vec3& b)
+inline Vec3& operator+=(Vec3& a, const Vec3& b)
 {
 	a.x += b.x;
 	a.y += b.y;
 	a.z += b.z;
 	return a;
 }
-Vec3& operator-=(Vec3& a, const Vec3& b)
+inline Vec3& operator-=(Vec3& a, const Vec3& b)
 {
 	a.x -= b.x;
 	a.y -= b.y;
@@ -132,7 +132,7 @@ Vec3& operator-=(Vec3& a, const Vec3& b)
 	return a;
 }
 
-Vec3 operator-(const Vec3& a, const Vec3& b)
+inline Vec3 operator-(const Vec3& a, const Vec3& b)
 {
 	Vec3 ret;
 
@@ -143,7 +143,7 @@ Vec3 operator-(const Vec3& a, const Vec3& b)
 	return ret;
 }
 
-Vec3 operator*(const Vec3& a, const Vec3& b)
+inline Vec3 operator*(const Vec3& a, const Vec3& b)
 {
 	Vec3 ret;
 
@@ -154,7 +154,7 @@ Vec3 operator*(const Vec3& a, const Vec3& b)
 	return ret;
 }
 
-Vec3 operator*(const Vec3& a, float b)
+inline Vec3 operator*(const Vec3& a, float b)
 {
 	Vec3 ret;
 
@@ -165,7 +165,7 @@ Vec3 operator*(const Vec3& a, float b)
 	return ret;
 }
 
-Vec3 operator*(float a, const Vec3& b)
+inline Vec3 operator*(float a, const Vec3& b)
 {
 	Vec3 ret;
 
@@ -176,12 +176,12 @@ Vec3 operator*(float a, const Vec3& b)
 	return ret;
 }
 
-float dot(const Vec3& a, const Vec3& b)
+inline float dot(const Vec3& a, const Vec3& b)
 {
 	return a.x*b.x + a.y*b.y + a.z*b.z;
 }
 
-Vec3 cross(const Vec3& a, const Vec3& b)
+inline Vec3 cross(const Vec3& a, const Vec3& b)
 {
 	Vec3 ret;
 
@@ -192,7 +192,7 @@ Vec3 cross(const Vec3& a, const Vec3& b)
 	return ret;
 }
 
-Vec4 vec4(float x, float y, float z, float w)
+inline Vec4 vec4(float x, float y, float z, float w)
 {
 	Vec4 ret;
 	ret.x = x;
@@ -202,12 +202,12 @@ Vec4 vec4(float x, float y, float z, float w)
 	return ret;
 }
 
-Vec4 vec4(const Vec3& xyz, float w)
+inline Vec4 vec4(const Vec3& xyz, float w)
 {
 	return vec4(xyz.x, xyz.y, xyz.z, w);
 }
 
-Vec4& operator*=(Vec4& a, float b)
+inline Vec4& operator*=(Vec4& a, float b)
 {
 	a.x *= b;
 	a.y *= b;
@@ -216,29 +216,29 @@ Vec4& operator*=(Vec4& a, float b)
 	return a;
 }
 
-float length_squared(const Vec3& a)
+inline float length_squared(const Vec3& a)
 {
 	return a.x*a.x + a.y*a.y + a.z*a.z;
 }
 
-float length(const Vec3& a)
+inline float length(const Vec3& a)
 {
 	return sqrtf(a.x*a.x + a.y*a.y + a.z*a.z);
 }
 
-Vec3 normalize(const Vec3& a)
+inline Vec3 normalize(const Vec3& a)
 {
 	return a * (1.0f / length(a));
 }
 
-const Mat44 mat44_identity = {
+static const Mat44 mat44_identity = {
 	1.0f, 0.0f, 0.0f, 0.0f,
 	0.0f, 1.0f, 0.0f, 0.0f,
 	0.0f, 0.0f, 1.0f, 0.0f,
 	0.0f, 0.0f, 0.0f, 1.0f,
 };
 
-const Mat44 mat44_zero = {
+static const Mat44 mat44_zero = {
 	0.0f, 0.0f, 0.0f, 0.0f,
 	0.0f, 0.0f, 0.0f, 0.0f,
 	0.0f, 0.0f, 0.0f, 0.0f,
@@ -247,7 +247,7 @@ const Mat44 mat44_zero = {
 
 const Vec3 vec3_zero = { 0.0f, 0.0f, 0.0f };
 
-Mat44 mat44_translate(const Vec3& translation)
+inline Mat44 mat44_translate(const Vec3& translation)
 {
 	Mat44 ret = mat44_identity;
 
@@ -258,7 +258,7 @@ Mat44 mat44_translate(const Vec3& translation)
 	return ret;
 }
 
-Mat44 mat44_scale(const Vec3& scale)
+inline Mat44 mat44_scale(const Vec3& scale)
 {
 	Mat44 ret = mat44_identity;
 
@@ -269,7 +269,7 @@ Mat44 mat44_scale(const Vec3& scale)
 	return ret;
 }
 
-Mat44 mat44_rotate_x(float angle)
+inline Mat44 mat44_rotate_x(float angle)
 {
 	Mat44 ret = mat44_identity;
 
@@ -284,7 +284,7 @@ Mat44 mat44_rotate_x(float angle)
 	return ret;
 }
 
-Mat44 mat44_rotate_y(float angle)
+inline Mat44 mat44_rotate_y(float angle)
 {
 	Mat44 ret = mat44_identity;
 
@@ -299,7 +299,7 @@ Mat44 mat44_rotate_y(float angle)
 	return ret;
 }
 
-Mat44 mat44_rotate_z(float angle)
+inline Mat44 mat44_rotate_z(float angle)
 {
 	Mat44 ret = mat44_identity;
 
@@ -314,7 +314,7 @@ Mat44 mat44_rotate_z(float angle)
 	return ret;
 }
 
-Mat44 mat44_rotate_normalized_axis(const Vec3& axis, float angle)
+inline Mat44 mat44_rotate_normalized_axis(const Vec3& axis, float angle)
 {
 	Mat44 ret;
 
@@ -347,12 +347,12 @@ Mat44 mat44_rotate_normalized_axis(const Vec3& axis, float angle)
 	return ret;
 }
 
-Mat44 mat44_rotate_axis(const Vec3& axis, float angle)
+inline Mat44 mat44_rotate_axis(const Vec3& axis, float angle)
 {
 	return mat44_rotate_normalized_axis(normalize(axis), angle);
 }
 
-Mat44 mat44_axes(const Vec3& forward, const Vec3& right, const Vec3& up, const Vec3& pos = vec3_zero)
+inline Mat44 mat44_axes(const Vec3& forward, const Vec3& right, const Vec3& up, const Vec3& pos = vec3_zero)
 {
 	Mat44 ret;
 
@@ -379,7 +379,7 @@ Mat44 mat44_axes(const Vec3& forward, const Vec3& right, const Vec3& up, const V
 	return ret;
 }
 
-Mat44 mat44_lookat(const Vec3& eye, const Vec3& target, const Vec3& up)
+inline Mat44 mat44_lookat(const Vec3& eye, const Vec3& target, const Vec3& up)
 {
 	Vec3 forward = normalize(target - eye);
 	Vec3 right = normalize(cross(forward, up));
@@ -388,7 +388,7 @@ Mat44 mat44_lookat(const Vec3& eye, const Vec3& target, const Vec3& up)
 	return mat44_axes(forward, right, new_up, eye);
 }
 
-Mat44 mat44_perspective(float fov, float aspect, float near_z, float far_z)
+inline Mat44 mat44_perspective(float fov, float aspect, float near_z, float far_z)
 {
 	Mat44 ret = mat44_zero;
 
@@ -404,7 +404,7 @@ Mat44 mat44_perspective(float fov, float aspect, float near_z, float far_z)
 	return ret;
 }
 
-Mat44 operator*(const Mat44& a, const Mat44& b)
+inline Mat44 operator*(const Mat44& a, const Mat44& b)
 {
 	Mat44 ret;
 
@@ -431,7 +431,7 @@ Mat44 operator*(const Mat44& a, const Mat44& b)
 	return ret;
 }
 
-Mat44 transpose(const Mat44& a)
+inline Mat44 transpose(const Mat44& a)
 {
 	Mat44 ret;
 
@@ -458,7 +458,7 @@ Mat44 transpose(const Mat44& a)
 	return ret;
 }
 
-float determinant(const Mat44& a)
+inline float determinant(const Mat44& a)
 {
 	return 
 		+ a._11*a._22*a._33*a._44 + a._11*a._23*a._34*a._42 + a._11*a._24*a._32*a._43
@@ -471,7 +471,7 @@ float determinant(const Mat44& a)
 		- a._14*a._21*a._32*a._43 - a._14*a._22*a._33*a._41 - a._14*a._23*a._31*a._42;
 }
 
-Mat44 inverse(const Mat44& mat)
+inline Mat44 inverse(const Mat44& mat)
 {
 	Mat44 ret;
 
@@ -514,13 +514,13 @@ Mat44 inverse(const Mat44& mat)
 	return ret;
 }
 
-Mat44& operator*=(Mat44& a, const Mat44& b)
+inline Mat44& operator*=(Mat44& a, const Mat44& b)
 {
 	a = a * b;
 	return a;
 }
 
-Vec3 operator*(const Vec3& vec, const Mat44& mat)
+inline Vec3 operator*(const Vec3& vec, const Mat44& mat)
 {
 	Vec3 ret;
 
@@ -531,7 +531,7 @@ Vec3 operator*(const Vec3& vec, const Mat44& mat)
 	return ret;
 }
 
-Vec4 operator*(const Vec4& vec, const Mat44& mat)
+inline Vec4 operator*(const Vec4& vec, const Mat44& mat)
 {
 	Vec4 ret;
 

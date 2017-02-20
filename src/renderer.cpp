@@ -11,6 +11,7 @@ struct Buffer
 {
 	GLuint Buf;
 	GLenum BindPoint;
+	size_t Size;
 };
 
 const GLenum GlBufferType[] =
@@ -26,6 +27,7 @@ Buffer *CreateBuffer(BufferType type)
 	Buffer *b = (Buffer*)malloc(sizeof(Buffer));
 	glGenBuffers(1, &b->Buf);
 	b->BindPoint = GlBufferType[type];
+	b->Size = 0;
 	return b;
 }
 
@@ -35,6 +37,7 @@ Buffer *CreateStaticBuffer(BufferType type, const void *data, size_t size)
 	GLenum bp = b->BindPoint;
 	glBindBuffer(bp, b->Buf);
 	glBufferData(bp, size, data, GL_STATIC_DRAW);
+	b->Size = size;
 	return b;
 }
 
@@ -43,18 +46,92 @@ void SetBufferData(Buffer *b, const void *data, size_t size)
 	GLenum bp = b->BindPoint;
 	glBindBuffer(bp, b->Buf);
 	glBufferData(bp, size, data, GL_STATIC_DRAW);
+	b->Size = size;
+}
+
+void ReserveUndefinedBuffer(Buffer *b, size_t size, bool shrink)
+{
+	GLenum bp = b->BindPoint;
+	glBindBuffer(bp, b->Buf);
+
+	if (shrink || size > b->Size)
+	{
+		glBufferData(bp, size, NULL, GL_STATIC_DRAW);
+		b->Size = size;
+	}
+	else
+		glInvalidateBufferData(bp);
+
 }
 
 void *LockBuffer(Buffer *b)
 {
+	if (b->Size == 0)
+		return NULL;
+
 	glBindBuffer(b->BindPoint, b->Buf);
+	//return glMapBufferRange(b->BindPoint, 0, b->Size, GL_MAP_WRITE_BIT);
 	return glMapBuffer(b->BindPoint, GL_WRITE_ONLY);
 }
 
 void UnlockBuffer(Buffer *b)
 {
+	if (b->Size == 0)
+		return;
+
 	glBindBuffer(b->BindPoint, b->Buf);
 	glUnmapBuffer(b->BindPoint);
+}
+
+struct Timer
+{
+	GLuint Queries[4];
+	uint32_t QueryIndex;
+	bool Active;
+};
+
+Timer *CreateTimer()
+{
+	Timer *t = (Timer*)malloc(sizeof(Timer));
+	glGenQueries(4, t->Queries);
+	t->QueryIndex = 0;
+	t->Active = false;
+	return t;
+}
+
+double GetTimerMilliseconds(Timer *t)
+{
+	if (!t->Active)
+		return 0.0;
+	else
+	{
+		GLuint64 value;
+		glGetQueryObjectui64v(t->Queries[t->QueryIndex], GL_QUERY_RESULT, &value);
+		return (double)value / 1000000.0;
+	}
+}
+
+void StartTimer(CommandBuffer *cb, Timer *t)
+{
+	glBeginQuery(GL_TIME_ELAPSED, t->Queries[t->QueryIndex]);
+}
+
+void StopTimer(CommandBuffer *cb, Timer *t)
+{
+	glEndQuery(GL_TIME_ELAPSED);
+	t->QueryIndex++;
+	if (t->QueryIndex >= 4)
+	{
+		t->QueryIndex = 0;
+		t->Active = true;
+	}
+}
+
+void CopyBufferData(CommandBuffer *cb, Buffer *dst, Buffer *src, size_t dstOffset, size_t srcOffset, size_t size)
+{
+	glBindBuffer(GL_COPY_WRITE_BUFFER, dst->Buf);
+	glBindBuffer(GL_COPY_READ_BUFFER, src->Buf);
+	glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, srcOffset, dstOffset, size);
 }
 
 struct VertexSpec
@@ -113,6 +190,8 @@ struct CommandBuffer
 
 	GLenum IndexType;
 	GLuint IndexBuffer;
+
+	RenderStateInfo State;
 };
 
 CommandBuffer *CreateCommandBuffer()
@@ -120,7 +199,7 @@ CommandBuffer *CreateCommandBuffer()
 	return new CommandBuffer();
 }
 
-GLuint CreateAndBindVao(VertexSpec *spec, Buffer **buffers, uint32_t numStreams)
+GLuint CreateAndBindVao(CommandBuffer *cb, VertexSpec *spec, Buffer **buffers, uint32_t numStreams)
 {
 	GLuint vao;
 	glGenVertexArrays(1, &vao);
@@ -145,6 +224,9 @@ GLuint CreateAndBindVao(VertexSpec *spec, Buffer **buffers, uint32_t numStreams)
 					e->Normalized,
 					e->Stride,
 					(const GLvoid*)(uintptr_t)e->Offset);
+
+			if (e->Divisor > 0)
+				glVertexAttribDivisor(e->Index, e->Divisor);
 		}
 	}
 
@@ -164,14 +246,19 @@ void SetVertexBuffers(CommandBuffer *cb, VertexSpec *spec, Buffer **buffers, uin
 	auto it = cb->VAOs.find(vb);
 
 	if (it == cb->VAOs.end())
-		cb->VAOs[vb] = CreateAndBindVao(spec, buffers, numStreams);
+		cb->VAOs[vb] = CreateAndBindVao(cb, spec, buffers, numStreams);
 	else
 		glBindVertexArray(it->second);
 }
 
 void SetUniformBuffer(CommandBuffer *cb, uint32_t index, Buffer *b)
 {
-	glBindBufferBase(GL_UNIFORM_BUFFER, 0, b->Buf);
+	glBindBufferBase(GL_UNIFORM_BUFFER, index, b->Buf);
+}
+
+void SetStorageBuffer(CommandBuffer *cb, uint32_t index, Buffer *b)
+{
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, index, b->Buf);
 }
 
 void SetIndexBuffer(CommandBuffer *cb, Buffer *b, DataType type)
@@ -184,6 +271,16 @@ void SetIndexBuffer(CommandBuffer *cb, Buffer *b, DataType type)
 void DrawIndexed(CommandBuffer *cb, DrawType type, uint32_t num, uint32_t indexOffset)
 {
 	glDrawElements(GlDrawType[type], num, cb->IndexType, (const GLvoid*)(uintptr_t)indexOffset);
+}
+
+void DrawIndexedInstanced(CommandBuffer *cb, DrawType type, uint32_t numInstances, uint32_t num, uint32_t indexOffset)
+{
+	glDrawElementsInstanced(GlDrawType[type], num, cb->IndexType, (const GLvoid*)(uintptr_t)indexOffset, numInstances);
+}
+
+void DispatchCompute(CommandBuffer *cb, uint32_t x, uint32_t y, uint32_t z)
+{
+	glDispatchCompute(x, y, z);
 }
 
 const GLenum GlShaderTypes[ShaderTypeCount] = {
@@ -353,6 +450,17 @@ Sampler *CreateSampler(const SamplerInfo *si)
 	return s;
 }
 
+Sampler *CreateSamplerSimple(FilterMode min, FilterMode mag, FilterMode mip, WrapMode wrap, uint32_t anisotropy)
+{
+	SamplerInfo si;
+	si.Min = min;
+	si.Mag = mag;
+	si.Mip = mip;
+	si.WrapU = si.WrapV = si.WrapW = wrap;
+	si.Anisotropy = anisotropy;
+	return CreateSampler(&si);
+}
+
 struct Texture
 {
 	GLuint Tex;
@@ -518,5 +626,45 @@ void Clear(CommandBuffer *cb, const ClearInfo *ci)
 
 	if (flags)
 		glClear(flags);
+}
+
+struct RenderState
+{
+	RenderStateInfo Info;
+};
+
+RenderState *CreateRenderState(const RenderStateInfo *rsi)
+{
+	RenderState *rs = (RenderState*)malloc(sizeof(RenderState));
+	rs->Info = *rsi;
+	return rs;
+}
+
+void SetRenderState(CommandBuffer *cb, RenderState *r)
+{
+	if (r->Info.DepthTest >= RsBoolFalse && r->Info.DepthTest != cb->State.DepthTest)
+	{
+		if (r->Info.DepthTest == RsBoolTrue)
+			glEnable(GL_DEPTH_TEST);
+		else
+			glDisable(GL_DEPTH_TEST);
+		cb->State.DepthTest = r->Info.DepthTest;
+	}
+
+	if (r->Info.DepthWrite >= RsBoolFalse && r->Info.DepthWrite != cb->State.DepthWrite)
+	{
+		glDepthMask(r->Info.DepthWrite == RsBoolTrue ? GL_TRUE : GL_FALSE);
+		cb->State.DepthWrite = r->Info.DepthWrite;
+	}
+
+	if (r->Info.BlendEnable >= RsBoolFalse && r->Info.BlendEnable != cb->State.BlendEnable)
+	{
+		if (r->Info.BlendEnable == RsBoolTrue)
+			glEnable(GL_BLEND);
+		else
+			glDisable(GL_BLEND);
+
+		cb->State.BlendEnable = r->Info.BlendEnable;
+	}
 }
 

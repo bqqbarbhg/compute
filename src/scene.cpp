@@ -4,13 +4,14 @@
 #include <vector>
 #include <unordered_map>
 #include "math.h"
-
-#define ArrayCount(arr) (sizeof(arr) / sizeof(*(arr)))
+#include "util.h"
+#include "particles.h"
 
 CommandBuffer *g_CommandBuffer;
 VertexSpec *g_ObjSpec;
 Sampler *g_ObjSampler;
 Shader *g_ObjShader;
+RenderState *g_State;
 
 struct Object
 {
@@ -52,26 +53,8 @@ VertexElement ObjVertex_Elements[] =
 	{ 0, 1, 2, DataFloat, false, 3*4, 5*4 },
 };
 
-char *ReadFile(const char *path, size_t *pSize)
-{
-	FILE *file = fopen(path, "rb");
-	if (!file) return NULL;
-
-	fseek(file, 0, SEEK_END);
-	size_t size = ftell(file);
-	fseek(file, 0, SEEK_SET);
-
-	if (pSize)
-		*pSize = size;
-
-	char *buf = (char*)malloc(size + 1);
-	fread(buf, 1, size, file);
-
-	buf[size] = '\0';
-	fclose(file);
-
-	return buf;
-}
+ParticleSystem *g_ParticleSystems[1];
+uint32_t g_CurrentParticleSystem = 0;
 
 void Initialize()
 {
@@ -95,8 +78,18 @@ void Initialize()
 	g_ObjSpec = CreateVertexSpec(ObjVertex_Elements, ArrayCount(ObjVertex_Elements));
 	g_CommandBuffer = CreateCommandBuffer();
 
+	{
+		RenderStateInfo rsi;
+		rsi.DepthTest = RsBoolTrue;
+		rsi.DepthWrite = RsBoolTrue;
+		rsi.BlendEnable = RsBoolFalse;
+		g_State = CreateRenderState(&rsi);
+	}
+
 	for (uint32_t i = 0; i < ArrayCount(g_UniformBuffers); i++)
 		g_UniformBuffers[i] = CreateBuffer(BufferUniform);
+
+		std::vector<Triangle> triangles;
 
 	{
 		int imageWidth, imageHeight;
@@ -124,6 +117,8 @@ void Initialize()
 			size_t indexOffset = 0;
 			for (size_t faceI = 0; faceI < shape->mesh.num_face_vertices.size(); faceI++)
 			{
+				Vec3 verts[3];
+
 				assert(shape->mesh.num_face_vertices[faceI] == 3);
 				for (uint32_t i = 0; i < 3; i++)
 				{
@@ -139,6 +134,10 @@ void Initialize()
 					v.u = vt[0];
 					v.v = 1.0f - vt[1];
 
+					verts[i].x = v.x;
+					verts[i].y = v.y;
+					verts[i].z = v.z;
+
 					uint16_t index = (uint16_t)vertices.size();
 					auto it = indexMap.insert(std::make_pair(v, index));
 					if (it.second)
@@ -153,6 +152,12 @@ void Initialize()
 				}
 
 				indexOffset += 3;
+
+				Triangle t;
+				t.A = verts[0];
+				t.B = verts[1];
+				t.C = verts[2];
+				triangles.push_back(t);
 			}
 
 			Object *obj = &g_Objects[shapeI];
@@ -164,7 +169,32 @@ void Initialize()
 
 			obj->NumIndices = (uint32_t)indices.size();
 		}
+	}
 
+	g_ParticleSystems[0] = ParticlesCreateDumbGpu();
+
+
+	for (uint32_t i = 0; i < ArrayCount(g_ParticleSystems); i++)
+	{
+		g_ParticleSystems[i]->Initialize(triangles.data(), triangles.size());
+	}
+
+	{
+		CommandBuffer *cb = g_CommandBuffer;
+		ParticleSystem *ps = g_ParticleSystems[g_CurrentParticleSystem];
+
+#if 0
+		for (int i = 0; i < 1000; i++)
+		{
+			Particle p;
+			p.Position = vec3((float)rand() / (float)RAND_MAX * 5.0f - 2.5f, 5.0f, (float)rand() / (float)RAND_MAX * 5.0f - 2.5f);
+			p.Velocity = vec3(0.0f, -1.0f, 0.0f);
+			p.Lifetime = 10.0f;
+			ps->SpawnParticles(&p, 1);
+
+			ps->Update(cb, 0.016f);
+		}
+#endif
 	}
 }
 
@@ -188,6 +218,8 @@ void Render()
 {
 	CommandBuffer *cb = g_CommandBuffer;
 
+	SetRenderState(cb, g_State);
+
 	{
 		ClearInfo ci;
 		ci.ClearColor = true;
@@ -201,7 +233,7 @@ void Render()
 	}
 
 	static float TTT;
-	TTT += 0.016f;
+	TTT += 0.0016f;
 
 	Mat44 proj = mat44_perspective(1.5f, 1280.0f/720.0f, 0.1f, 1000.0f);
 	Mat44 view = mat44_lookat(
@@ -225,4 +257,25 @@ void Render()
 		SetTexture(cb, 0, obj->Texture, g_ObjSampler);
 		DrawIndexed(cb, DrawTriangles, obj->NumIndices, 0);
 	}
+
+	ParticleSystem *ps = g_ParticleSystems[g_CurrentParticleSystem];
+
+	static int QQQ;
+	QQQ++;
+
+	// if (QQQ % 5 == 0)
+	{
+		Particle parts[20];
+		for (uint32_t i = 0; i < ArrayCount(parts); i++)
+		{
+			parts[i].Position = vec3((float)rand() / (float)RAND_MAX * 5.0f - 2.5f, 4.0f, (float)rand() / (float)RAND_MAX * 5.0f - 2.5f);
+			parts[i].Velocity = vec3(0.0f, 0.0f, 0.0f);
+			parts[i].Lifetime = 10.0f;
+		}
+		ps->SpawnParticles(parts, ArrayCount(parts));
+	}
+
+	ps->Update(cb, 0.016f);
+
+	ps->Render(cb, view, proj);
 }

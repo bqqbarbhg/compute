@@ -27,7 +27,8 @@ void APIENTRY GlDebugCallback(GLenum source, GLenum type, GLuint id, GLenum seve
 
 	fprintf(stderr, "GL %s: %s\n", mType, (const char*)message);
 
-	__debugbreak();
+	if (type != GL_DEBUG_TYPE_OTHER)
+		__debugbreak();
 }
 
 void Initialize();
@@ -69,6 +70,8 @@ int main(int argc, char **argv)
 	glfwSwapInterval(1);
 
 	glEnable(GL_DEPTH_TEST);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
 	Initialize();
 
 	// Main loop

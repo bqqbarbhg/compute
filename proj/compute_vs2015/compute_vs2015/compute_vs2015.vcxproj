@@ -126,14 +126,20 @@
     <ClCompile Include="..\..\..\ext\stb_image.c" />
     <ClCompile Include="..\..\..\ext\tinyobj_loader.cpp" />
     <ClCompile Include="..\..\..\src\main.cpp" />
+    <ClCompile Include="..\..\..\src\particles_dumb_cpu.cpp" />
+    <ClCompile Include="..\..\..\src\particles_dumb_gpu.cpp" />
     <ClCompile Include="..\..\..\src\renderer.cpp" />
     <ClCompile Include="..\..\..\src\scene.cpp" />
+    <ClCompile Include="..\..\..\src\util.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\ext\stb_image.h" />
     <ClInclude Include="..\..\..\ext\tinyobj_loader.h" />
+    <ClInclude Include="..\..\..\src\math.h" />
     <ClInclude Include="..\..\..\src\opengl.h" />
+    <ClInclude Include="..\..\..\src\particles.h" />
     <ClInclude Include="..\..\..\src\renderer.h" />
+    <ClInclude Include="..\..\..\src\util.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
