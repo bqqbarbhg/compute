@@ -119,6 +119,8 @@ public:
 
 	virtual void Update(CommandBuffer *cb, float dt)
 	{
+		uint64_t begin = BeginMeasureCpuTime();
+
 		Vec3 gravity = vec3(0.0f, -4.0f, 0.0f) * dt;
 		for (auto &particle : Particles)
 		{
@@ -142,6 +144,12 @@ public:
 				}
 			}
 		}
+
+		double delta = EndMeasureCpuTime(begin);
+
+		char title[128];
+		sprintf(title, "CPU: %.2fms, Particles: %u", delta, Particles.size());
+		SetWindowTitle(title);
 	}
 
 	virtual void Render(CommandBuffer *cb, const Mat44& view, const Mat44& proj)

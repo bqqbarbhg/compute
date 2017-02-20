@@ -1,6 +1,6 @@
+#include "opengl.h"
 #include "util.h"
 #include "renderer.h"
-#include "opengl.h"
 #include "../ext/stb_image.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,5 +67,16 @@ char *ReadFile(const char *path, size_t *pSize)
 void SetWindowTitle(const char *title)
 {
 	glfwSetWindowTitle(g_Window, title);
+}
+
+uint64_t BeginMeasureCpuTime()
+{
+	return glfwGetTimerValue();
+}
+
+double EndMeasureCpuTime(uint64_t begin)
+{
+	uint64_t delta = glfwGetTimerValue() - begin;
+	return (double)delta / (double)glfwGetTimerFrequency() * 1000.0;
 }
 
