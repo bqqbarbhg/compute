@@ -77,14 +77,28 @@ int main(int argc, char **argv)
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 #endif
 
-	// Initialize();
+	Device *dev = CreateDevice(g_Window);
 
 	// Main loop
 	while (!glfwWindowShouldClose(g_Window))
 	{
 		glfwPollEvents();
 
-		// Render();
+		BeginFrame(dev);
+		CommandBuffer *cb = GetFrameCommandBuffer(dev);
+
+		ClearInfo ci;
+		ci.ClearColor = true;
+		ci.ClearDepth = true;
+		ci.ClearStencil = true;
+		ci.Color[0] = 0x64 / 255.0f;
+		ci.Color[1] = 0x95 / 255.0f;
+		ci.Color[2] = 0xED / 255.0f;
+		ci.Color[3] = 0.0f;
+
+		Clear(cb, &ci);
+
+		Present(dev);
 
 		glfwSwapBuffers(g_Window);
 	}
@@ -92,4 +106,5 @@ int main(int argc, char **argv)
 	glfwDestroyWindow(g_Window);
 	glfwTerminate();
 }
+
 

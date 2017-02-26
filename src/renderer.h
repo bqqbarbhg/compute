@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 
+struct Device;
 struct Shader;
 struct Buffer;
 struct CommandBuffer;
@@ -67,6 +68,7 @@ enum TexFormat
 {
 	TexRGBA8,
 	TexDepth32,
+	TexDepth24Stencil8,
 };
 
 struct VertexElement
@@ -120,6 +122,12 @@ enum RsBool
 	RsBoolTrue = 3,
 };
 
+enum TexFlags
+{
+	TexFlagsNoSample = 1 << 0,
+	TexFlagsRenderTarget = 1 << 1,
+};
+
 struct RenderStateInfo
 {
 	RsBool DepthTest;
@@ -127,35 +135,38 @@ struct RenderStateInfo
 	RsBool BlendEnable;
 };
 
-RenderState *CreateRenderState(const RenderStateInfo *rsi);
+Device *CreateDevice(void *arg);
+void CreateSwapchain(Device *d, void *window);
+void BeginFrame(Device *d);
+void Present(Device *d);
 
-void SetVertexBuffers(CommandBuffer *cb, VertexSpec *spec, Buffer **buffers, uint32_t numStreams);
+RenderState *CreateRenderState(Device *d, const RenderStateInfo *rsi);
 
-Buffer *CreateBuffer(BufferType type);
-Buffer *CreateStaticBuffer(BufferType type, const void *data, size_t size);
-void SetBufferData(Buffer *b, const void *data, size_t size);
-void ReserveUndefinedBuffer(Buffer *b, size_t size, bool shrink);
+Buffer *CreateBuffer(Device *d, BufferType type);
+Buffer *CreateStaticBuffer(Device *d, BufferType type, const void *data, size_t size);
+void SetBufferData(Device *d, Buffer *b, const void *data, size_t size);
+void ReserveUndefinedBuffer(Device *d, Buffer *b, size_t size, bool shrink);
 
-void *LockBuffer(Buffer *b);
-void UnlockBuffer(Buffer *b);
+void *LockBuffer(Device *d, Buffer *b);
+void UnlockBuffer(Device *d, Buffer *b);
 
+VertexSpec *CreateVertexSpec(Device *d, const VertexElement *el, uint32_t count);
 
-VertexSpec *CreateVertexSpec(const VertexElement *el, uint32_t count);
-CommandBuffer *CreateCommandBuffer();
+Shader *CreateShader(Device *d, const ShaderSource *sources, uint32_t numSources);
+void DestroyShader(Device *d, Shader *s);
 
-Shader *CreateShader(const ShaderSource *sources, uint32_t numSources);
-void DestroyShader(Shader *s);
+Texture *CreateTexture(Device *d, TextureType type, uint32_t flags);
+Texture *CreateStaticTexture2D(Device *d, const void **data, uint32_t levels, uint32_t width, uint32_t height, TexFormat format, uint32_t flags);
 
-Texture *CreateTexture(TextureType type);
-Texture *CreateStaticTexture2D(const void **data, uint32_t levels, uint32_t width, uint32_t height, TexFormat format);
+Framebuffer *CreateFramebuffer(Device *d, Texture **color, uint32_t numColor, Texture *depthStencilTexture, DepthStencilCreateInfo *depthStencilCreate);
 
-Framebuffer *CreateFramebuffer(Texture **color, uint32_t numColor, Texture *depthStencilTexture, DepthStencilCreateInfo *depthStencilCreate);
+Sampler *CreateSampler(Device *d, const SamplerInfo *si);
+Sampler *CreateSamplerSimple(Device *d, FilterMode min, FilterMode mag, FilterMode mip, WrapMode wrap, uint32_t anisotropy);
 
-Sampler *CreateSampler(const SamplerInfo *si);
-Sampler *CreateSamplerSimple(FilterMode min, FilterMode mag, FilterMode mip, WrapMode wrap, uint32_t anisotropy);
-
-Timer *CreateTimer();
+Timer *CreateTimer(Device *d);
 double GetTimerMilliseconds(Timer *t);
+
+CommandBuffer *GetFrameCommandBuffer(Device *d);
 
 void StartTimer(CommandBuffer *cb, Timer *t);
 void StopTimer(CommandBuffer *cb, Timer *t);
@@ -167,9 +178,10 @@ void SetStorageBuffer(CommandBuffer *cb, uint32_t index, Buffer *b);
 void SetShader(CommandBuffer *cb, Shader *s);
 void SetIndexBuffer(CommandBuffer *cb, Buffer *b, DataType type);
 void SetTexture(CommandBuffer *cb, uint32_t index, Texture *tex, Sampler *sm);
-void SetFramebuffer(CommandBuffer *cb, Framebuffer *f);
+void SetFramebuffer(CommandBuffer *cb, Framebuffer *f, bool loadContents);
 void SetRenderState(CommandBuffer *cb, RenderState *r);
 void DrawIndexed(CommandBuffer *cb, DrawType type, uint32_t num, uint32_t indexOffset);
 void DrawIndexedInstanced(CommandBuffer *cb, DrawType type, uint32_t numInstances, uint32_t num, uint32_t indexOffset);
 void DispatchCompute(CommandBuffer *cb, uint32_t x, uint32_t y, uint32_t z);
+void SetVertexBuffers(CommandBuffer *cb, VertexSpec *spec, Buffer **buffers, uint32_t numStreams);
 

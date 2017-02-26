@@ -512,6 +512,8 @@ Texture *CreateStaticTexture2D(const void **data, uint32_t levels, uint32_t widt
 		h /= 2;
 	}
 
+	glGenerateMipmap(t->BindPoint);
+
 	return t;
 }
 
