@@ -95,6 +95,15 @@ inline Vec3 vec3(float x, float y, float z)
 	return ret;
 }
 
+inline Vec3 vec3s(float s)
+{
+	Vec3 ret;
+	ret.x = s;
+	ret.y = s;
+	ret.z = s;
+	return ret;
+}
+
 inline Vec3 operator-(const Vec3& a)
 {
 	Vec3 ret;

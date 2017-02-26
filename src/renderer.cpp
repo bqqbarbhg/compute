@@ -54,7 +54,7 @@ void ReserveUndefinedBuffer(Buffer *b, size_t size, bool shrink)
 	GLenum bp = b->BindPoint;
 	glBindBuffer(bp, b->Buf);
 
-	if (shrink || size > b->Size)
+	if (shrink || size > b->Size || true)
 	{
 		glBufferData(bp, size, NULL, GL_STATIC_DRAW);
 		b->Size = size;
@@ -440,7 +440,7 @@ Sampler *CreateSampler(const SamplerInfo *si)
 	const GLenum *min = si->Mip == FilterNearest ? GlFilterModeMinNearest : GlFilterModeMinLinear;
 
 	glSamplerParameteri(s->SamplerObject, GL_TEXTURE_MAG_FILTER, mag[si->Mag]);
-	glSamplerParameteri(s->SamplerObject, GL_TEXTURE_MIN_FILTER, mag[si->Min]);
+	glSamplerParameteri(s->SamplerObject, GL_TEXTURE_MIN_FILTER, min[si->Min]);
 	if (si->Anisotropy > 0)
 		glSamplerParameterf(s->SamplerObject, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)si->Anisotropy);
 	glSamplerParameteri(s->SamplerObject, GL_TEXTURE_WRAP_S, GlWrapMode[si->WrapU]);
@@ -511,6 +511,8 @@ Texture *CreateStaticTexture2D(const void **data, uint32_t levels, uint32_t widt
 		w /= 2;
 		h /= 2;
 	}
+
+	glGenerateMipmap(t->BindPoint);
 
 	return t;
 }

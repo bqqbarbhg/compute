@@ -3,21 +3,10 @@
 #include "math.h"
 #include <stdint.h>
 #include <vector>
+#include "intersection.h"
 
 struct CommandBuffer;
 struct Texture;
-
-struct Triangle
-{
-	union {
-		struct {
-			Vec3 A, B, C;
-		};
-		struct {
-			Vec3 P[3];
-		};
-	};
-};
 
 struct Particle
 {
@@ -41,4 +30,5 @@ public:
 
 ParticleSystem *ParticlesCreateDumbCpu();
 ParticleSystem *ParticlesCreateDumbGpu();
+ParticleSystem *ParticlesCreateGridGpu();
 

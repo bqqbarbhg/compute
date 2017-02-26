@@ -171,7 +171,7 @@ void Initialize()
 		}
 	}
 
-	g_ParticleSystems[0] = ParticlesCreateDumbGpu();
+	g_ParticleSystems[0] = ParticlesCreateGridGpu();
 
 
 	for (uint32_t i = 0; i < ArrayCount(g_ParticleSystems); i++)
@@ -263,12 +263,12 @@ void Render()
 	static int QQQ;
 	QQQ++;
 
-	// if (QQQ % 5 == 0)
+	if (QQQ % 100 == 0)
 	{
-		Particle parts[20];
+		static Particle parts[10000];
 		for (uint32_t i = 0; i < ArrayCount(parts); i++)
 		{
-			parts[i].Position = vec3((float)rand() / (float)RAND_MAX * 5.0f - 2.5f, 4.0f, (float)rand() / (float)RAND_MAX * 5.0f - 2.5f);
+			parts[i].Position = vec3((float)rand() / (float)RAND_MAX * 5.0f - 2.5f, 4.0f + (float)rand() / (float)RAND_MAX * 2.0f, (float)rand() / (float)RAND_MAX * 5.0f - 2.5f);
 			parts[i].Velocity = vec3(0.0f, 0.0f, 0.0f);
 			parts[i].Lifetime = 10.0f;
 		}

@@ -74,7 +74,7 @@ public:
 	uint32_t NumParticles;
 	uint32_t NumTriangles;
 
-	Timer *GpuTimer;
+	Timer *GpuTimer, *RenderTimer;
 
 	ParticleSystemDumbGpu()
 	{
@@ -88,6 +88,7 @@ public:
 		UniformBuffer = CreateStaticBuffer(BufferUniform, NULL, sizeof(ParticleUniform));
 		SimUniformBuffer = CreateStaticBuffer(BufferUniform, NULL, sizeof(SimUniform));
 		GpuTimer = CreateTimer();
+		RenderTimer = CreateTimer();
 
 		ParticleBuffer = CreateStaticBuffer(BufferStorage, NULL, sizeof(GpuParticle) * 1024 * 128);
 		TriangleBuffer = CreateBuffer(BufferStorage);
@@ -143,7 +144,9 @@ public:
 	virtual void Update(CommandBuffer *cb, float dt)
 	{
 		char title[128];
-		sprintf(title, "GPU: %.2fms, Particles: %u", GetTimerMilliseconds(GpuTimer), NumParticles);
+		sprintf(title, "Sim: %.2fms, Render: %.2fms   Particles: %u",
+			GetTimerMilliseconds(GpuTimer),
+			GetTimerMilliseconds(RenderTimer), NumParticles);
 		SetWindowTitle(title);
 
 		StartTimer(cb, GpuTimer);
@@ -206,6 +209,7 @@ public:
 
 	virtual void Render(CommandBuffer *cb, const Mat44& view, const Mat44& proj)
 	{
+		StartTimer(cb, RenderTimer);
 
 		// Update uniform buffer
 		{
@@ -223,6 +227,8 @@ public:
 		SetStorageBuffer(cb, 0, ParticleBuffer);
 		SetTexture(cb, 0, ParticleTex, ParticleSampler);
 		DrawIndexedInstanced(cb, DrawTriangles, NumParticles, 6, 0);
+
+		StopTimer(cb, RenderTimer);
 	}
 };
 
