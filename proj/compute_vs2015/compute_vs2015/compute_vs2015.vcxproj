@@ -132,6 +132,8 @@
     <ClCompile Include="..\..\..\src\particles_grid_gpu.cpp" />
     <ClCompile Include="..\..\..\src\renderer.cpp" />
     <ClCompile Include="..\..\..\src\scene.cpp" />
+    <ClCompile Include="..\..\..\src\scene2.cpp" />
+    <ClCompile Include="..\..\..\src\scene3.cpp" />
     <ClCompile Include="..\..\..\src\util.cpp" />
   </ItemGroup>
   <ItemGroup>

@@ -81,3 +81,28 @@ bool IntersectAABBvTriangle(const AABB& aabb, const Triangle& triangle)
 	return IntersectAABBvTriangle((aabb.Min + aabb.Max) * 0.5f, (aabb.Max - aabb.Min) * 0.5f, triangle);
 }
 
+bool IntersectRayvTriangle(const Vec3& origin, const Vec3& dir, const Triangle& triangle, float *outT)
+{
+	Vec3 e1 = triangle.B - triangle.A;
+	Vec3 e2 = triangle.C - triangle.A;
+	Vec3 pvec = cross(dir, e2);
+	float det = dot(e1, pvec);
+
+	if (fabs(det) < 0.00001f)
+		return false;
+
+	float invDet = 1.0f / det;
+	Vec3 tvec = origin - triangle.A;
+	float u = dot(tvec, pvec) * invDet;
+	if (u < 0.0f || u > 1.0f)
+		return false;
+
+	Vec3 qvec = cross(tvec, e1);
+	float v = dot(dir, qvec) * invDet;
+	if (v < 0.0f || v > 1.0f)
+		return false;
+
+	*outT = dot(e2, qvec) * invDet;
+	return true;
+}
+

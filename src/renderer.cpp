@@ -148,11 +148,25 @@ const GLenum GlDataType[] =
 	GL_UNSIGNED_INT,
 };
 
+const bool GlIntegral[] =
+{
+	false,
+	true,
+	true,
+	true,
+};
+
 const GLenum GlDrawType[] =
 {
 	GL_POINTS,
 	GL_LINES,
 	GL_TRIANGLES,
+};
+
+const GLenum GlFillMode[] =
+{
+	GL_FILL,
+	GL_LINE,
 };
 
 VertexSpec *CreateVertexSpec(const VertexElement *el, uint32_t count)
@@ -217,13 +231,25 @@ GLuint CreateAndBindVao(CommandBuffer *cb, VertexSpec *spec, Buffer **buffers, u
 
 			glEnableVertexAttribArray(e->Index);
 
-			glVertexAttribPointer(
-					e->Index,
-					e->NumComponents,
-					GlDataType[e->Type],
-					e->Normalized,
-					e->Stride,
-					(const GLvoid*)(uintptr_t)e->Offset);
+			if (GlIntegral[e->Type] && !e->Normalized)
+			{
+				glVertexAttribIPointer(
+						e->Index,
+						e->NumComponents,
+						GlDataType[e->Type],
+						e->Stride,
+						(const GLvoid*)(uintptr_t)e->Offset);
+			}
+			else
+			{
+				glVertexAttribPointer(
+						e->Index,
+						e->NumComponents,
+						GlDataType[e->Type],
+						e->Normalized,
+						e->Stride,
+						(const GLvoid*)(uintptr_t)e->Offset);
+			}
 
 			if (e->Divisor > 0)
 				glVertexAttribDivisor(e->Index, e->Divisor);
@@ -266,6 +292,11 @@ void SetIndexBuffer(CommandBuffer *cb, Buffer *b, DataType type)
 	cb->IndexType = GlDataType[type];
 	cb->IndexBuffer = b->Buf;
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, b->Buf);
+}
+
+void DrawArrays(CommandBuffer *cb, DrawType type, uint32_t num, uint32_t indexOffset)
+{
+	glDrawArrays(GlDrawType[type], indexOffset, num);
 }
 
 void DrawIndexed(CommandBuffer *cb, DrawType type, uint32_t num, uint32_t indexOffset)
@@ -670,3 +701,7 @@ void SetRenderState(CommandBuffer *cb, RenderState *r)
 	}
 }
 
+void SetFillMode(CommandBuffer *cb, FillMode mode)
+{
+	glPolygonMode(GL_FRONT_AND_BACK, GlFillMode[mode]);
+}

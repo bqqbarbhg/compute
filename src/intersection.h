@@ -44,3 +44,5 @@ bool IntersectAABBvTriangle(const Vec3& center, const Vec3& halfSize, const Vec3
 bool IntersectAABBvTriangle(const Vec3& center, const Vec3& halfSize, const Triangle& triangle);
 bool IntersectAABBvTriangle(const AABB& aabb, const Triangle& triangle);
 
+bool IntersectRayvTriangle(const Vec3& origin, const Vec3& dir, const Triangle& triangle, float *outT);
+

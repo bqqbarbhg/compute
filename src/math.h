@@ -52,6 +52,31 @@ inline Vec2 operator-(const Vec2& a)
 	return ret;
 }
 
+inline Vec2 operator+(const Vec2& a)
+{
+	return a;
+}
+
+inline Vec2 operator*(const Vec2& a, float b)
+{
+	Vec2 ret;
+
+	ret.x = a.x * b;
+	ret.y = a.y * b;
+
+	return ret;
+}
+
+inline Vec2 operator*(const Vec2& a, const Vec2& b)
+{
+	Vec2 ret;
+
+	ret.x = a.x * b.x;
+	ret.y = a.y * b.y;
+
+	return ret;
+}
+
 inline Vec2 operator+(const Vec2& a, const Vec2& b)
 {
 	Vec2 ret;
@@ -225,6 +250,16 @@ inline Vec4& operator*=(Vec4& a, float b)
 	return a;
 }
 
+inline float length_squared(const Vec2& a)
+{
+	return a.x*a.x + a.y*a.y;
+}
+
+inline float length(const Vec2& a)
+{
+	return sqrtf(a.x*a.x + a.y*a.y);
+}
+
 inline float length_squared(const Vec3& a)
 {
 	return a.x*a.x + a.y*a.y + a.z*a.z;
@@ -233,6 +268,11 @@ inline float length_squared(const Vec3& a)
 inline float length(const Vec3& a)
 {
 	return sqrtf(a.x*a.x + a.y*a.y + a.z*a.z);
+}
+
+inline Vec2 normalize(const Vec2& a)
+{
+	return a * (1.0f / length(a));
 }
 
 inline Vec3 normalize(const Vec3& a)

@@ -69,6 +69,12 @@ enum TexFormat
 	TexDepth32,
 };
 
+enum FillMode
+{
+	FillSolid,
+	FillWireframe,
+};
+
 struct VertexElement
 {
 	uint32_t Stream;
@@ -169,6 +175,8 @@ void SetIndexBuffer(CommandBuffer *cb, Buffer *b, DataType type);
 void SetTexture(CommandBuffer *cb, uint32_t index, Texture *tex, Sampler *sm);
 void SetFramebuffer(CommandBuffer *cb, Framebuffer *f);
 void SetRenderState(CommandBuffer *cb, RenderState *r);
+void SetFillMode(CommandBuffer *cb, FillMode mode);
+void DrawArrays(CommandBuffer *cb, DrawType type, uint32_t num, uint32_t indexOffset);
 void DrawIndexed(CommandBuffer *cb, DrawType type, uint32_t num, uint32_t indexOffset);
 void DrawIndexedInstanced(CommandBuffer *cb, DrawType type, uint32_t numInstances, uint32_t num, uint32_t indexOffset);
 void DispatchCompute(CommandBuffer *cb, uint32_t x, uint32_t y, uint32_t z);

@@ -1,3 +1,5 @@
+#if 0
+
 #include "renderer.h"
 #include "../ext/stb_image.h"
 #include "../ext/tinyobj_loader.h"
@@ -279,3 +281,5 @@ void Render()
 
 	ps->Render(cb, view, proj);
 }
+
+#endif

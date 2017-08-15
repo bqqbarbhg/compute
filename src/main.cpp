@@ -25,10 +25,10 @@ void APIENTRY GlDebugCallback(GLenum source, GLenum type, GLuint id, GLenum seve
 	case GL_DEBUG_TYPE_PERFORMANCE: mType = "Performance"; break;
 	}
 
-	fprintf(stderr, "GL %s: %s\n", mType, (const char*)message);
+	// fprintf(stderr, "GL %s: %s\n", mType, (const char*)message);
 
-	if (type != GL_DEBUG_TYPE_OTHER)
-		__debugbreak();
+	// if (type != GL_DEBUG_TYPE_OTHER && type != GL_DEBUG_TYPE_PERFORMANCE)
+		// __debugbreak();
 }
 
 void Initialize();
