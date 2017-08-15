@@ -43,7 +43,7 @@ struct ReflectorPair
 	float Distance;
 };
 
-constexpr uint32_t MaxGroupNeighbors = 8;
+constexpr uint32_t MaxGroupNeighbors = 16;
 
 struct ReflectorGroup
 {
@@ -128,8 +128,6 @@ struct ObjVertexHash
 
 bool operator==(const ObjVertex &a, const ObjVertex &b)
 {
-
-Buffer *g_LineBuffer;
 	return !memcmp(&a, &b, sizeof(ObjVertex));
 }
 
@@ -165,7 +163,7 @@ float LightTransport(Reflector &a, Reflector &b)
 	if (da <= 0.0f || db <= 0.0f)
 		return 0.0f;
 
-	float atteunation = 5.0f;
+	float atteunation = 2.0f;
 	float inf = (atteunation * da * db) / (Pi * length_squared(dir) + atteunation);
 	return inf;
 }
