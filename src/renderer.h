@@ -66,6 +66,7 @@ enum TextureType
 enum TexFormat
 {
 	TexRGBA8,
+	TexRGBAF16,
 	TexDepth32,
 };
 

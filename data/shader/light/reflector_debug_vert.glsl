@@ -26,6 +26,7 @@ void main()
 	vec3 pos = in_Position + (tangent * in_Vert.x + bitangent * in_Vert.y) * in_Radius;
 
 	v_Color = in_Color.rgb;
+	// v_Color = in_Light.rgb;
 
 	gl_Position = u_ViewProjection * vec4(pos, 1.0);
 }

@@ -1,5 +1,4 @@
 #if 1
-
 #include <GLFW/glfw3.h>
 #include "renderer.h"
 #include "../ext/stb_image.h"
@@ -16,14 +15,27 @@ extern GLFWwindow *g_Window;
 const float Pi = 3.14159265358979323846f;
 
 CommandBuffer *g_CommandBuffer;
+
 VertexSpec *g_ObjSpec;
 VertexSpec *g_ReflectorSpec;
 VertexSpec *g_LineSpec;
+VertexSpec *g_SphereSpec;
+VertexSpec *g_QuadSpec;
+
+Sampler *g_BasicSampler;
 Sampler *g_ObjSampler;
+
 Shader *g_ObjShader;
 Shader *g_ReflectorShader;
 Shader *g_LineShader;
+Shader *g_ProbeShader;
+Shader *g_TonemapShader;
+
 RenderState *g_State;
+
+Texture *g_HdrColor;
+Texture *g_HdrDepth;
+Framebuffer *g_HdrFramebuffer;
 
 struct ObjVertex
 {
@@ -35,6 +47,11 @@ struct LineVertex
 {
 	Vec3 Pos;
 	uint32_t Col;
+};
+
+struct SphereVertex
+{
+	Vec3 Normal;
 };
 
 struct ReflectorPair
@@ -49,11 +66,13 @@ struct ReflectorGroup
 {
 	std::vector<uint32_t> Reflectors;
 	Vec3 Normal;
+	float NeighborsInfluence[MaxGroupNeighbors];
 	uint32_t Neighbors[MaxGroupNeighbors];
 	uint32_t NumNeighbors;
 	Vec3 Center;
 
 	Vec3 CurrentLight;
+	Vec3 TotalLight;
 };
 
 struct GpuReflector
@@ -100,10 +119,29 @@ struct Object
 	std::vector<VertexReflector> Reflectors;
 };
 
+constexpr uint32_t MaxProbeGroups = 32;
+
+struct LightProbeAffectingGroup
+{
+	uint32_t Index;
+	float Influence;
+};
+
+struct LightProbe
+{
+	Vec3 Position;
+	Vec3 SH[4];
+
+	LightProbeAffectingGroup Groups[MaxProbeGroups];
+	uint32_t NumGroups;
+};
+
+std::vector<LightProbe> g_Probes;
+
 Object g_Objects[32];
 uint32_t g_NumObjects;
 
-Buffer *g_UniformBuffers[32];
+Buffer *g_UniformBuffers[128];
 uint32_t g_UniformIndex;
 
 const uint32_t ReflectorSegments = 16;
@@ -111,6 +149,14 @@ Buffer *g_ReflectorCircleVertices;
 Buffer *g_ReflectorCircleIndices;
 
 Buffer *g_LineBuffer;
+
+const uint32_t SphereRes = 8;
+const uint32_t SphereNumIndex = (SphereRes - 1) * (SphereRes - 1) * 6 * 6;
+Buffer *g_SphereVertexBuffer;
+Buffer *g_SphereIndexBuffer;
+
+Buffer *g_QuadIndices;
+Buffer *g_QuadVerts;
 
 std::vector<Reflector> g_Reflectors;
 std::vector<ReflectorGroup> g_ReflectorGroups;
@@ -154,7 +200,18 @@ VertexElement LineVertex_Elements[] =
 	{ 0, 1, 4, DataUInt8, true,  3*4, 4*4 },
 };
 
-float LightTransport(Reflector &a, Reflector &b)
+VertexElement SphereVertex_Elements[] =
+{
+	{ 0, 0, 3, DataFloat, false, 0*4, 3*4 },
+};
+
+VertexElement QuadVertex_Elements[] =
+{
+	{ 0, 0, 2, DataFloat, false, 0*4, 4*4 },
+	{ 0, 1, 2, DataFloat, false, 2*4, 4*4 },
+};
+
+float LightTransportDiscDisc(Reflector &a, Reflector &b)
 {
 	Vec3 dir = b.Position - a.Position;
 	Vec3 ndir = normalize(dir);
@@ -168,6 +225,19 @@ float LightTransport(Reflector &a, Reflector &b)
 	return inf;
 }
 
+float LightTransportDiscPos(Reflector &a, const Vec3& pos)
+{
+	Vec3 dir = pos - a.Position;
+	Vec3 ndir = normalize(dir);
+	float da = dot(a.Normal, ndir);
+	if (da <= 0.0f)
+		return 0.0f;
+
+	float atteunation = 2.0f;
+	float inf = (atteunation * da) / (Pi * length_squared(dir) + atteunation);
+	return inf;
+}
+
 std::vector<LineVertex> g_DebugLines;
 
 void DebugLine(Vec3 a, Vec3 b, Vec3 color)
@@ -178,6 +248,17 @@ void DebugLine(Vec3 a, Vec3 b, Vec3 color)
 
 	g_DebugLines.push_back(av);
 	g_DebugLines.push_back(bv);
+}
+
+void AddLightToSH(Vec3 *sh, const Vec3& light, const Vec3& dir)
+{
+	const float p00 = 0.282094791773878140f;
+	const float p01 = 0.488602511902919920f;
+
+	sh[0] += light * (p00);
+	sh[1] += light * (p01 * dir.x);
+	sh[2] += light * (p01 * dir.y);
+	sh[3] += light * (p01 * dir.z);
 }
 
 void Initialize()
@@ -210,6 +291,32 @@ void Initialize()
 	}
 
 	{
+		ShaderSource src[2];
+		src[0].Type = ShaderTypeVertex;
+		src[0].Source = ReadFile("shader/light/probe_debug_vert.glsl", NULL);
+		src[1].Type = ShaderTypeFragment;
+		src[1].Source = ReadFile("shader/light/probe_debug_frag.glsl", NULL);
+		g_ProbeShader = CreateShader(src, 2);
+	}
+
+	{
+		ShaderSource src[2];
+		src[0].Type = ShaderTypeVertex;
+		src[0].Source = ReadFile("shader/light/tonemap_vert.glsl", NULL);
+		src[1].Type = ShaderTypeFragment;
+		src[1].Source = ReadFile("shader/light/tonemap_frag.glsl", NULL);
+		g_TonemapShader = CreateShader(src, 2);
+	}
+
+	{
+		SamplerInfo si;
+		si.Min = si.Mag = si.Mip = FilterLinear;
+		si.WrapU = si.WrapV = si.WrapW = WrapWrap;
+		si.Anisotropy = 0;
+		g_BasicSampler = CreateSampler(&si);
+	}
+
+	{
 		SamplerInfo si;
 		si.Min = si.Mag = si.Mip = FilterLinear;
 		si.WrapU = si.WrapV = si.WrapW = WrapWrap;
@@ -220,6 +327,9 @@ void Initialize()
 	g_ObjSpec = CreateVertexSpec(ObjVertex_Elements, ArrayCount(ObjVertex_Elements));
 	g_ReflectorSpec = CreateVertexSpec(ReflectorVertex_Elements, ArrayCount(ReflectorVertex_Elements));
 	g_LineSpec = CreateVertexSpec(LineVertex_Elements, ArrayCount(LineVertex_Elements));
+	g_SphereSpec = CreateVertexSpec(SphereVertex_Elements, ArrayCount(SphereVertex_Elements));
+	g_QuadSpec = CreateVertexSpec(QuadVertex_Elements, ArrayCount(QuadVertex_Elements));
+
 	g_CommandBuffer = CreateCommandBuffer();
 
 
@@ -235,6 +345,11 @@ void Initialize()
 		g_UniformBuffers[i] = CreateBuffer(BufferUniform);
 
 	g_LineBuffer = CreateBuffer(BufferVertex);
+
+	g_HdrColor = CreateStaticTexture2D(NULL, 1, 1280, 720, TexRGBAF16);
+	g_HdrDepth = CreateStaticTexture2D(NULL, 1, 1280, 720, TexDepth32);
+
+	g_HdrFramebuffer = CreateFramebuffer(&g_HdrColor, 1, g_HdrDepth, NULL);
 
 	std::vector<Triangle> triangles;
 
@@ -345,13 +460,76 @@ void Initialize()
 		g_ReflectorCircleIndices = CreateStaticBuffer(BufferIndex, indices, ReflectorSegments * sizeof(uint16_t) * 3);
 	}
 
-	Triangle tri;
-	tri.A = vec3(1.0f, 0.0f, 0.0f);
-	tri.B = vec3(-1.0f, 0.0f, 0.0f);
-	tri.C = vec3(0.0f, 0.0f, 1.0f);
-	float t= -1.0f;
-	int test = IntersectRayvTriangle(vec3(0.0f, -1.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f), tri, &t);
-	printf("Test: %d (%f)\n", test, t);
+	{
+		std::vector<SphereVertex> verts;
+		std::vector<uint16_t> indices;
+		verts.resize(SphereRes * SphereRes * 6);
+		indices.resize((SphereRes - 1) * (SphereRes - 1) * 6 * 6);
+
+		Vec3 axes[3] = {
+			{ 1.0f, 0.0f, 0.0f },
+			{ 0.0f, 1.0f, 0.0f },
+			{ 0.0f, 0.0f, 1.0f },
+		};
+
+		for (int axis = 0; axis < 3; axis++)
+		{
+			Vec3 u = axes[(axis + 0) % 3];
+			Vec3 r = axes[(axis + 1) % 3];
+			Vec3 f = axes[(axis + 2) % 3];
+
+			for (int side = 0; side < 2; side++)
+			{
+				Vec3 center = f * (side ? 0.5f : -0.5f);
+
+				for (int y = 0; y < SphereRes; y++)
+				for (int x = 0; x < SphereRes; x++)
+				{
+					float xf = x / (float)(SphereRes - 1) - 0.5f;
+					float yf = y / (float)(SphereRes - 1) - 0.5f;
+					Vec3 n = normalize(center + r * xf + u * yf);
+
+					verts[((axis * 2 + side) * SphereRes + y) * SphereRes + x].Normal = n;
+				}
+			}
+		}
+
+		for (int face = 0; face < 6; face++)
+		{
+			uint16_t base = face * SphereRes * SphereRes;
+			uint16_t *fi = indices.data() + face * (SphereRes - 1) * (SphereRes - 1) * 6;
+
+			for (uint32_t y = 0; y < SphereRes - 1; y++)
+			for (uint32_t x = 0; x < SphereRes - 1; x++)
+			{
+				uint16_t a = base + y * SphereRes + x, b = a + SphereRes;
+				uint16_t *qi = fi + (y * (SphereRes - 1) + x) * 6;
+
+				qi[0] = a;
+				qi[1] = a + 1;
+				qi[2] = b;
+				qi[3] = b;
+				qi[4] = a + 1;
+				qi[5] = b + 1;
+			}
+		}
+
+		g_SphereVertexBuffer = CreateStaticBuffer(BufferVertex, verts.data(), verts.size() * sizeof(SphereVertex));
+		g_SphereIndexBuffer = CreateStaticBuffer(BufferIndex, indices.data(), indices.size() * sizeof(uint16_t));
+	}
+
+	{
+		Vec2 vert[] = {
+			{ -1.0f, -1.0f }, { 0.0f, 0.0f },
+			{ +1.0f, -1.0f }, { 1.0f, 0.0f },
+			{ -1.0f, +1.0f }, { 0.0f, 1.0f },
+			{ +1.0f, +1.0f }, { 1.0f, 1.0f },
+		};
+		uint16_t index[] = { 0, 1, 2, 2, 1, 3 };
+
+		g_QuadVerts = CreateStaticBuffer(BufferVertex, vert, sizeof(vert));
+		g_QuadIndices = CreateStaticBuffer(BufferIndex, index, sizeof(index));
+	}
 
 	{
 		std::vector<Reflector> reflectors;
@@ -390,11 +568,13 @@ void Initialize()
 				for (uint32_t i = 0; i < MaxGroupNeighbors; i++)
 					r.NeighborContribution[i] = 0.0f;
 
-				if (r.Normal.x > 0.9f)
+#if 0
+				if (r.Normal.x > 0.9f && r.Position.x < -3.0f)
 					r.Diffuse = vec3(1.0f, 0.0f, 0.0f) * 0.7f;
-				else if (r.Normal.x < -0.9f)
+				else if (r.Normal.x < -0.9f && r.Position.x > 3.0f)
 					r.Diffuse = vec3(0.0f, 1.0f, 0.0f) * 0.7f;
 				else
+#endif
 					r.Diffuse = vec3(1.0f, 1.0f, 1.0f) * 0.7f;
 
 				uint32_t ri = reflectors.size();
@@ -480,7 +660,7 @@ void Initialize()
 				Reflector &a = reflectors[aI];
 				Reflector &b = reflectors[bI];
 
-				float transport = LightTransport(a, b);
+				float transport = LightTransportDiscDisc(a, b);
 
 				if (transport > 0.001f)
 				{
@@ -496,8 +676,10 @@ void Initialize()
 						if (IntersectRayvTriangle(src, dir, tri, &t))
 						{
 							if (t > 0.0f && t < len)
+							{
 								shadow = true;
-							break;
+								break;
+							}
 						}
 					}
 
@@ -546,7 +728,10 @@ void Initialize()
 				sortedInfluences.resize(MaxGroupNeighbors);
 
 			for (uint32_t i = 0; i < sortedInfluences.size(); i++)
+			{
 				group.Neighbors[i] = sortedInfluences[i].second;
+				group.NeighborsInfluence[i] = 0.0f;
+			}
 			group.NumNeighbors = sortedInfluences.size();
 		}
 
@@ -579,17 +764,89 @@ void Initialize()
 						Reflector &a = reflectors[refI];
 						Reflector &b = reflectors[nb];
 
-						influence[i] += LightTransport(a, b);
+						influence[i] += LightTransportDiscDisc(a, b);
 					}
 				}
 
+				for (uint32_t i = 0; i < group.NumNeighbors; i++)
+					group.NeighborsInfluence[i] += influence[i];
 			}
+
+			for (uint32_t i = 0; i < group.NumNeighbors; i++)
+				group.NeighborsInfluence[i] /= (float)group.Reflectors.size();
 
 		}
 
 		g_Reflectors.swap(reflectors);
 		g_ReflectorGroups.swap(groups);
 		g_ReflectorBuffer = CreateBuffer(BufferVertex);
+	}
+
+	{
+		LightProbe probe;
+		probe.Position = vec3(0.0f, 2.0f, 0.0f);
+		memset(probe.SH, 0, sizeof(probe.SH));
+		g_Probes.push_back(probe);
+	}
+
+	std::vector<std::pair<float, uint32_t> > groupInfluence;
+	groupInfluence.resize(g_ReflectorGroups.size());
+	for (uint32_t pI = 0; pI < g_Probes.size(); pI++)
+	{
+		LightProbe &p = g_Probes[pI];
+		for (uint32_t i = 0; i < g_ReflectorGroups.size(); i++)
+			groupInfluence[i] = std::make_pair(0.0f, i);
+
+		for (uint32_t aI = 0; aI < g_Reflectors.size(); aI++)
+		{
+			Reflector &a = g_Reflectors[aI];
+
+			float transport = LightTransportDiscPos(a, p.Position);
+
+			if (transport > 0.001f)
+			{
+				Vec3 src = a.Position;
+				Vec3 dst = p.Position;
+				float len = length(dst - src);
+				Vec3 dir = normalize(dst - src);
+
+				bool shadow = false;
+
+				for (Triangle &tri : triangles)
+				{
+					float t;
+					if (IntersectRayvTriangle(src, dir, tri, &t))
+					{
+						if (t > 0.01f && t < len - 0.01f)
+						{
+							shadow = true;
+							break;
+						}
+					}
+				}
+
+				if (shadow)
+					continue;
+
+				groupInfluence[a.Group].first += transport;
+			}
+		}
+
+		std::sort(groupInfluence.begin(), groupInfluence.end(), [](auto &a, auto &b){
+			return a.first > b.first;
+		});
+
+		uint32_t num;
+		for (num = 0; num < MaxProbeGroups; num++)
+		{
+			float influence = groupInfluence[num].first;
+			if (influence <= 0.001f)
+				break;
+
+			p.Groups[num].Index = groupInfluence[num].second;
+			p.Groups[num].Influence = groupInfluence[num].first;
+		}
+		p.NumGroups = num;
 	}
 }
 
@@ -601,7 +858,7 @@ void PushUniform(CommandBuffer *cb, uint32_t index, const void *data, uint32_t s
 	Buffer *b = g_UniformBuffers[g_UniformIndex];
 	SetBufferData(b, data, size);
 
-	SetUniformBuffer(cb, 0, b);
+	SetUniformBuffer(cb, index, b);
 }
 
 struct ObjectUniform
@@ -619,6 +876,33 @@ struct LineUniform
 	Mat44 u_ViewProjection;
 };
 
+struct ProbeUniformGlobal
+{
+	Mat44 u_ViewProjection;
+};
+
+struct ProbeUniform
+{
+	Vec4 u_PositionRadius;
+	Vec4 u_SH[4];
+};
+
+bool g_TogglePrev[512];
+bool g_ToggleValue[512];
+
+bool Toggle(int key)
+{
+	if (glfwGetKey(g_Window, key))
+	{
+		if (!g_TogglePrev[key])
+			g_ToggleValue[key] = !g_ToggleValue[key];
+		g_TogglePrev[key] = true;
+	}
+	else
+		g_TogglePrev[key] = false;
+	return g_ToggleValue[key];
+}
+
 void UpdateLight()
 {
 	auto &reflectors = g_Reflectors;
@@ -626,6 +910,13 @@ void UpdateLight()
 
 	static float TTT = 0.0f;
 	TTT += 0.016f;
+
+	for (uint32_t groupI = 0; groupI < groups.size(); groupI++)
+	{
+		ReflectorGroup &group = groups[groupI];
+		group.TotalLight = vec3(0.0f, 0.0f, 0.0f);
+		group.CurrentLight = vec3(0.0f, 0.0f, 0.0f);
+	}
 
 	for (uint32_t i = 0; i < reflectors.size(); i++)
 	{
@@ -637,14 +928,16 @@ void UpdateLight()
 		float light = 1.0f - length_squared(p - l) * 0.3f;
 		if (light < 0.0f) light = 0.0f;
 
-		if (r.Position.y > 2.0f)
+		if (r.Position.y < 4.0f)
 			light = 0.0f;
 
 		r.CurrentLight = r.Diffuse * vec3s(light);
 		r.TotalLight = r.CurrentLight;
 	}
 
-	for (int bounce = 0; bounce < 2; bounce++)
+	bool separate = !Toggle(GLFW_KEY_S);
+
+	for (int bounce = 0; bounce < 3; bounce++)
 	{
 		for (uint32_t groupI = 0; groupI < groups.size(); groupI++)
 		{
@@ -656,26 +949,53 @@ void UpdateLight()
 				total += ref.CurrentLight;
 			}
 			group.CurrentLight = total * (1.0f / (float)group.Reflectors.size());
+			group.TotalLight += group.CurrentLight;
 		}
 
-		for (uint32_t groupI = 0; groupI < groups.size(); groupI++)
+		if (separate)
 		{
-			ReflectorGroup &group = groups[groupI];
-			Vec3 influence[MaxGroupNeighbors];
-			memset(influence, 0, sizeof(influence));
-
-			for (uint32_t nbI = 0; nbI < group.NumNeighbors; nbI++)
+			for (uint32_t groupI = 0; groupI < groups.size(); groupI++)
 			{
-				influence[nbI] = groups[group.Neighbors[nbI]].CurrentLight;
-			}
+				ReflectorGroup &group = groups[groupI];
+				Vec3 influence[MaxGroupNeighbors];
+				memset(influence, 0, sizeof(influence));
 
-			for (uint32_t grI = 0; grI < group.Reflectors.size(); grI++)
-			{
-				Reflector &ref = reflectors[group.Reflectors[grI]];
-				ref.CurrentLight = vec3s(0.0f);
 				for (uint32_t nbI = 0; nbI < group.NumNeighbors; nbI++)
 				{
-					Vec3 light = influence[nbI] * ref.NeighborContribution[nbI];
+					influence[nbI] = groups[group.Neighbors[nbI]].CurrentLight;
+				}
+
+				for (uint32_t grI = 0; grI < group.Reflectors.size(); grI++)
+				{
+					Reflector &ref = reflectors[group.Reflectors[grI]];
+					ref.CurrentLight = vec3s(0.0f);
+					for (uint32_t nbI = 0; nbI < group.NumNeighbors; nbI++)
+					{
+						Vec3 light = influence[nbI] * ref.NeighborContribution[nbI];
+						light = ref.Diffuse * light;
+						ref.CurrentLight += light;
+						ref.TotalLight += light;
+					}
+				}
+			}
+		}
+		else
+		{
+			for (uint32_t groupI = 0; groupI < groups.size(); groupI++)
+			{
+				ReflectorGroup &group = groups[groupI];
+				Vec3 influence = vec3_zero;
+
+				for (uint32_t nbI = 0; nbI < group.NumNeighbors; nbI++)
+				{
+					influence += group.NeighborsInfluence[nbI] * groups[group.Neighbors[nbI]].CurrentLight;
+				}
+
+				for (uint32_t grI = 0; grI < group.Reflectors.size(); grI++)
+				{
+					Reflector &ref = reflectors[group.Reflectors[grI]];
+					ref.CurrentLight = vec3s(0.0f);
+					Vec3 light = influence;
 					light = ref.Diffuse * light;
 					ref.CurrentLight += light;
 					ref.TotalLight += light;
@@ -684,6 +1004,23 @@ void UpdateLight()
 		}
 	}
 
+	for (uint32_t probeI = 0; probeI < g_Probes.size(); probeI++)
+	{
+		LightProbe &probe = g_Probes[probeI];
+		memset(probe.SH, 0, sizeof(probe.SH));
+
+		for (uint32_t groupI = 0; groupI < probe.NumGroups; groupI++)
+		{
+			ReflectorGroup &group = groups[probe.Groups[groupI].Index];
+			Vec3 diff = group.Center - probe.Position;
+			Vec3 normal = normalize(diff);
+			Vec3 light = group.TotalLight * probe.Groups[groupI].Influence;
+
+			AddLightToSH(probe.SH, light, normal);
+		}
+	}
+
+#if 0
 	for (uint32_t groupI = 0; groupI < groups.size(); groupI++)
 	{
 		ReflectorGroup &a = groups[groupI];
@@ -693,6 +1030,7 @@ void UpdateLight()
 			DebugLine(a.Center, b.Center, vec3(1.0f, 1.0f, 1.0f));
 		}
 	}
+#endif
 }
 
 void Render()
@@ -702,6 +1040,23 @@ void Render()
 	UpdateLight();
 
 	SetRenderState(cb, g_State);
+
+	static float TTT = 3.0f;
+
+	if (glfwGetKey(g_Window, GLFW_KEY_RIGHT))
+		TTT += 0.0016f * 5.0f;
+	else if (glfwGetKey(g_Window, GLFW_KEY_LEFT))
+		TTT -= 0.0016f * 5.0f;
+
+	Mat44 proj = mat44_perspective(1.5f, 1280.0f/720.0f, 0.1f, 1000.0f);
+	Mat44 view = mat44_lookat(
+		vec3(sinf(TTT) * 3.0f, 3.0f, cosf(TTT) * 3.0f),
+		vec3(0.0f, 0.0f, 0.0f),
+		vec3(0.0f, 1.0f, 0.0f));
+
+	bool renderReflectors = Toggle(GLFW_KEY_SPACE);
+
+	SetFramebuffer(cb, g_HdrFramebuffer);
 
 	{
 		ClearInfo ci;
@@ -714,26 +1069,6 @@ void Render()
 		ci.Depth = 1.0f;
 		Clear(cb, &ci);
 	}
-
-	static float TTT = 3.0f;
-	TTT += 0.0016f;
-
-	Mat44 proj = mat44_perspective(1.5f, 1280.0f/720.0f, 0.1f, 1000.0f);
-	Mat44 view = mat44_lookat(
-		vec3(sinf(TTT) * 3.0f, 3.0f, cosf(TTT) * 3.0f),
-		vec3(0.0f, 0.0f, 0.0f),
-		vec3(0.0f, 1.0f, 0.0f));
-
-	static bool renderReflectors = false;
-	static bool prev = false;
-	if (glfwGetKey(g_Window, GLFW_KEY_SPACE))
-	{
-		if (!prev)
-			renderReflectors = !renderReflectors;
-		prev = true;
-	}
-	else
-		prev = false;
 
 	if (!renderReflectors)
 	{
@@ -806,6 +1141,31 @@ void Render()
 
 		DrawIndexedInstanced(cb, DrawTriangles, g_Reflectors.size(), ReflectorSegments * 3, 0);
 	}
+
+	if (1)
+	{
+		SetShader(cb, g_ProbeShader);
+
+		ProbeUniformGlobal gu;
+		gu.u_ViewProjection = transpose(view * proj);
+		PushUniform(cb, 0, &gu, sizeof(gu));
+
+		SetVertexBuffers(cb, g_SphereSpec, &g_SphereVertexBuffer, 1);
+		SetIndexBuffer(cb, g_SphereIndexBuffer, DataUInt16);
+
+		for (auto &probe : g_Probes)
+		{
+			ProbeUniform ou;
+			ou.u_PositionRadius = vec4(probe.Position, 0.15f);
+
+			for (int band = 0; band < 4; band++)
+				ou.u_SH[band] = vec4(probe.SH[band], 0.0f);
+
+			PushUniform(cb, 1, &ou, sizeof(ou));
+
+			DrawIndexed(cb, DrawTriangles, SphereNumIndex, 0);
+		}
+	}
 	
 	if (0)
 	{
@@ -824,8 +1184,32 @@ void Render()
 
 			SetVertexBuffers(cb, g_LineSpec, &g_LineBuffer, 1);
 			DrawArrays(cb, DrawLines, g_DebugLines.size(), 0);
-			g_DebugLines.clear();
 		}
+	}
+	g_DebugLines.clear();
+
+	SetFramebuffer(cb, NULL);
+
+	{
+		ClearInfo ci;
+		ci.ClearColor = true;
+		ci.ClearDepth = true;
+		ci.Color[0] = 0x64 / 255.0f;
+		ci.Color[1] = 0x95 / 255.0f;
+		ci.Color[2] = 0xED / 255.0f;
+		ci.Color[3] = 1.0f;
+		ci.Depth = 1.0f;
+		Clear(cb, &ci);
+	}
+
+	{
+		SetShader(cb, g_TonemapShader);
+
+		SetTexture(cb, 0, g_HdrColor, g_BasicSampler);
+
+		SetVertexBuffers(cb, g_QuadSpec, &g_QuadVerts, 1);
+		SetIndexBuffer(cb, g_QuadIndices, DataUInt16);
+		DrawIndexed(cb, DrawTriangles, 6, 0);
 	}
 }
 

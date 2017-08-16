@@ -523,6 +523,7 @@ struct GlTexFormatPair
 const GlTexFormatPair GlTexFormat[] =
 {
 	{ GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE, false, false },
+	{ GL_RGB16F, GL_RGBA, GL_FLOAT, false, false },
 	{ GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT, GL_FLOAT, true, false, },
 };
 
@@ -608,7 +609,7 @@ Framebuffer *CreateFramebuffer(Texture **color, uint32_t numColor, Texture *dept
 		DepthStencilCreateInfo *ci = depthStencilCreate;
 		glGenRenderbuffers(1, &f->DepthRenderbuffer);
 		glBindRenderbuffer(GL_RENDERBUFFER, f->DepthRenderbuffer);
-		glRenderbufferStorage(GL_RENDERBUFFER, ci->Format, ci->Width, ci->Height);
+		glRenderbufferStorage(GL_RENDERBUFFER, GlTexFormat[ci->Format].InternalFormat, ci->Width, ci->Height);
 
 		GLenum atc = GetFramebufferAttachmentPoint(ci->Format);
 		glFramebufferRenderbuffer(GL_FRAMEBUFFER, atc, GL_RENDERBUFFER, f->DepthRenderbuffer);
